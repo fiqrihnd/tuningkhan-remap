@@ -296,18 +296,20 @@ export default function App() {
     }
   };
 
-  const handleSaveConfig = (e) => {
-  e.preventDefault();
-  
-  // LOGIKA BARU: Membersihkan URL agar tidak mengandung /rest/v1/ atau / di akhir
-  const cleanUrl = inputUrl
-    .replace(/\/rest\/v1\/?$/, '') // Hapus /rest/v1 jika ada di akhir
-    .replace(/\/$/, '');           // Hapus / jika ada di akhir
+ const handleSaveConfig = () => {
+  // Ambil input user
+  let rawUrl = inputUrl; 
 
+  // OTOMATIS BERSIHKAN URL (Hapus /rest/v1/ atau / di akhir)
+  const cleanUrl = rawUrl
+    .replace(/\/rest\/v1\/?$/, '') 
+    .replace(/\/$/, '');
+
+  // Simpan ke local storage
   localStorage.setItem('tk_supabase_url', cleanUrl);
   localStorage.setItem('tk_supabase_anon_key', inputKey);
-  
-  setConfig({ url: cleanUrl, key: inputKey });
+
+  // Reload halaman
   window.location.reload();
 };
 
