@@ -297,12 +297,19 @@ export default function App() {
   };
 
   const handleSaveConfig = (e) => {
-    e.preventDefault();
-    localStorage.setItem('tk_supabase_url', inputUrl);
-    localStorage.setItem('tk_supabase_anon_key', inputKey);
-    setConfig({ url: inputUrl, key: inputKey });
-    window.location.reload();
-  };
+  e.preventDefault();
+  
+  // LOGIKA BARU: Membersihkan URL agar tidak mengandung /rest/v1/ atau / di akhir
+  const cleanUrl = inputUrl
+    .replace(/\/rest\/v1\/?$/, '') // Hapus /rest/v1 jika ada di akhir
+    .replace(/\/$/, '');           // Hapus / jika ada di akhir
+
+  localStorage.setItem('tk_supabase_url', cleanUrl);
+  localStorage.setItem('tk_supabase_anon_key', inputKey);
+  
+  setConfig({ url: cleanUrl, key: inputKey });
+  window.location.reload();
+};
 
   const handleLogout = async () => {
     if (supabaseClient) {
