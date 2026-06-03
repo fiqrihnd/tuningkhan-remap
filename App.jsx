@@ -35,6 +35,13 @@ const getSupabaseClient = (url, key) => {
   return null;
 };
 
+// =========================================================================
+// MASUKKAN KREDENSIAL SUPABASE ANDA DI SINI AGAR SEMUA BROWSER OTOMATIS CONNECT
+// =========================================================================
+const DEFAULT_SUPABASE_URL = "https://nhjsgcocdzdplyuefnci.supabase.co"; // Ganti dengan URL Supabase Anda
+const DEFAULT_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5oanNnY29jZHpkcGx5dWVmbmNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzODEzMzUsImV4cCI6MjA5NTk1NzMzNX0.tAgwc_VmGgfuFgB0-UC0xvW1qdrr1ZoLmfyTMUuVanI"; // Ganti dengan Anon Key Supabase Anda
+// =========================================================================
+
 // --- ATURAN STANDARD DATE PICKER ---
 function DatePicker({ value, onChange, placeholder = "Pilih Tanggal" }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -297,9 +304,9 @@ export default function App() {
   // Custom Toast Notification System
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
 
-  // Supabase Configuration States
-  const [supabaseUrl, setSupabaseUrl] = useState(() => localStorage.getItem('tk_supabase_url') || '');
-  const [supabaseKey, setSupabaseKey] = useState(() => localStorage.getItem('tk_supabase_key') || '');
+  // Supabase Configuration States (Prioritas: localStorage -> Hardcoded Default -> Kosong)
+  const [supabaseUrl, setSupabaseUrl] = useState(() => localStorage.getItem('tk_supabase_url') || DEFAULT_SUPABASE_URL || '');
+  const [supabaseKey, setSupabaseKey] = useState(() => localStorage.getItem('tk_supabase_key') || DEFAULT_SUPABASE_KEY || '');
   const [dbStatus, setDbStatus] = useState('offline'); // 'offline', 'connected', 'error'
   const [supabaseClient, setSupabaseClient] = useState(null);
   const [loadingDb, setLoadingDb] = useState(false);
