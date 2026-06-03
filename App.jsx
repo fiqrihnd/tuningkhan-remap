@@ -445,51 +445,51 @@ export default function App() {
   };
 
   const calculateCrewBenefit = (crewName) => {
-    // 1. Manual registered 'Benefit' transactions (untuk kompatibilitas data lama jika ada)
+    // 1. Benefit Manual (dari input langsung di menu Keuangan)
     const manualBenefits = data.finance
-      .filter(f => f.crew === crewName && f.tipe === 'Benefit' && !f.isAuto)
+      .filter(f => f.crew === crewName && f.tipe === 'Benefit')
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
-    // 2. Kalkulasi benefit otomatis dari peran penugasan di data klien
+    // 2. Benefit Otomatis dari Peran di Menu Customer
     let autoBenefits = 0;
     data.customers.forEach(customer => {
       // Tuner: Rp250.000
-      if (customer.tuner === crewName) {
-        autoBenefits += 250000;
-      }
+      if (customer.tuner === crewName) autoBenefits += 250000;
+      
       // Remote: Rp150.000
-      if (customer.remote === crewName) {
-        autoBenefits += 150000;
-      }
-      // Support: Rp50.000 (bisa memilih lebih dari 1 crew)
-      if (Array.isArray(customer.support) && customer.support.includes(crewName)) {
-        autoBenefits += 50000;
-      } else if (typeof customer.support === 'string' && customer.support.split(',').map(s => s.trim()).includes(crewName)) {
-        autoBenefits += 50000;
+      if (customer.remote === crewName) autoBenefits += 150000;
+      
+      // Support: Rp50.000 per kru pembantu
+      const supports = typeof customer.support === 'string'
+        ? customer.support.split(',').map(s => s.trim())
+        : (Array.isArray(customer.support) ? customer.support : []);
+        
+      if (supports.includes(crewName)) autoBenefits += 50000;
+      
+      // Crew Pembawa (Membawa Pelanggan) -> Mengambil nominal benefit dari Panduan Layanan
+      if (customer.crew === crewName) {
+        const targetId = customer.paketId || customer.paket_id;
+        const paket = data.panduan.find(p => p.id === targetId);
+        if (paket) {
+          autoBenefits += Number(paket.benefit || 0);
+        }
       }
     });
 
     return manualBenefits + autoBenefits;
   };
 
-  // Kalkulasi Keuangan Komprehensif dengan Otomatisasi Terintegrasi
   const getFinancialAnalysis = () => {
-    // 1. Kas Pemasukan Manual (dari tabel Keuangan, abaikan log otomatis agar tidak double counting)
+    // 1. Ambil Pemasukan Manual (Diluar Pemasukan Otomatis untuk cegah Duplikasi data)
     const manualPemasukan = data.finance
-      .filter(f => f.tipe === 'Pemasukan' && !f.isAuto)
+      .filter(f => f.tipe === 'Pemasukan' && !f.customer_ref_id && !f.isAuto)
       .reduce((sum, f) => sum + Number(f.amount || 0), 0);
 
-    // 2. Kas Pengeluaran Manual (dari tabel Keuangan, abaikan log otomatis agar tidak double counting)
+    // 2. Ambil Pengeluaran Manual (Abaikan komisi otomatis)
     const manualPengeluaran = data.finance
-      .filter(f => f.tipe === 'Pengeluaran' && !f.isAuto)
+      .filter(f => f.tipe === 'Pengeluaran' && !f.customer_ref_id && !f.isAuto)
       .reduce((sum, f) => sum + Number(f.amount || 0), 0);
 
-    // 3. Kas Benefit Manual (jika ada sisa transaksi lama di tabel keuangan)
-    const manualBenefits = data.finance
-      .filter(f => f.tipe === 'Benefit' && !f.isAuto)
-      .reduce((sum, f) => sum + Number(f.amount || 0), 0);
-
-    // Komponen Akumulasi Otomatis dari Customer Data
     let totalHargaRemap = 0;
     let totalBenefitCrewPembawa = 0;
     let totalBenefitTuner = 0;
@@ -498,66 +498,97 @@ export default function App() {
     let totalPerantaraFee = 0;
 
     data.customers.forEach(c => {
-      const paket = data.panduan.find(p => p.id === c.paketId);
+      const targetId = c.paketId || c.paket_id;
+      const paket = data.panduan.find(p => p.id === targetId);
       if (paket) {
-        totalHargaRemap += Number(paket.hargaRemap || 0);
+        totalHargaRemap += Number(paket.harga_remap || paket.hargaRemap || 0);
         totalBenefitCrewPembawa += Number(paket.benefit || 0);
       }
       if (c.tuner) totalBenefitTuner += 250000;
       if (c.remote) totalBenefitRemote += 150000;
-      if (Array.isArray(c.support)) {
-        totalBenefitSupport += c.support.length * 50000;
-      } else if (c.support) {
-        totalBenefitSupport += c.support.split(',').filter(Boolean).length * 50000;
-      }
-      totalPerantaraFee += Number(c.perantaraFee || 0);
+      
+      const supports = typeof c.support === 'string'
+        ? c.support.split(',').filter(Boolean).length
+        : (Array.isArray(c.support) ? c.support.length : 0);
+        
+      totalBenefitSupport += supports * 50000;
+      totalPerantaraFee += Number(c.perantaraFee || c.perantara_fee || 0);
     });
 
-    // Total Benefit Otomatis yang diperoleh crew dari data customer
     const totalBenefitAuto = totalBenefitCrewPembawa + totalBenefitTuner + totalBenefitRemote + totalBenefitSupport;
-    
-    // Total Pengeluaran Otomatis (Seluruh Benefit Crew + Fee Perantara)
     const totalPengeluaranOtomatis = totalBenefitAuto + totalPerantaraFee;
 
-    // PENGGABUNGAN REALTIME (MANUAL + OTOMATIS CUSTOMER)
-    // Pemasukan Kumulatif = Pemasukan Manual + Harga Remap Otomatis
     const totalPemasukanKumulatif = manualPemasukan + totalHargaRemap;
-    
-    // Pengeluaran Kumulatif = Pengeluaran Manual + Seluruh Benefit Otomatis + Fee Perantara
     const totalPengeluaranKumulatif = manualPengeluaran + totalPengeluaranOtomatis;
-    
-    const totalBenefitAccumulated = manualBenefits + totalBenefitAuto;
 
-    // FORMULA UTAMA SALDO BERSIH:
-    // Total Pemasukan Kumulatif - Total Pengeluaran Kumulatif
     const totalSaldoBersih = totalPemasukanKumulatif - totalPengeluaranKumulatif;
 
     return {
-      totalPemasukan: totalPemasukanKumulatif, 
-      totalPengeluaran: totalPengeluaranKumulatif, 
-      totalBenefit: totalBenefitAccumulated,
-      totalSaldoBersih,
-      totalHargaRemap,
-      totalBenefitCrewPembawa,
-      totalBenefitTuner,
-      totalBenefitRemote,
-      totalBenefitSupport,
-      totalPerantaraFee
+      totalPemasukan: totalPemasukanKumulatif,
+      totalPengeluaran: totalPengeluaranKumulatif,
+      totalBenefit: totalBenefitAuto,
+      totalSaldoBersih
     };
   };
 
   const financialStats = getFinancialAnalysis();
 
-  const formatDateDisplay = (dateStr) => {
-    if (!dateStr) return '-';
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    const monthNames = [
-      "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
-      "Jul", "Agu", "Sep", "Okt", "Nov", "Des"
-    ];
-    return `${d.getDate()} ${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+  const getFilteredItems = () => {
+    const list = data[activeTab] || [];
+    
+    if (activeTab === 'customers') {
+      return list.filter(item => {
+        const matchesSearch = 
+          item.nama?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.plat?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.mobil?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.vin?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.warna?.toLowerCase().includes(searchQuery.toLowerCase());
+        
+        const matchesCrew = !filterCrew || 
+          item.crew === filterCrew ||
+          item.tuner === filterCrew ||
+          item.remote === filterCrew;
+          
+        const matchesDate = (!filterDateStart || item.tanggal >= filterDateStart) &&
+                            (!filterDateEnd || item.tanggal <= filterDateEnd);
+        
+        return matchesSearch && matchesCrew && matchesDate;
+      });
+    }
+
+    if (activeTab === 'crews') {
+      return list.filter(item => {
+        return item.nama?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+               item.posisi?.toLowerCase().includes(searchQuery.toLowerCase());
+      });
+    }
+
+    if (activeTab === 'finance') {
+      return list.filter(item => {
+        const matchesSearch = 
+          item.plat?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.crew?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.keterangan?.toLowerCase().includes(searchQuery.toLowerCase());
+        
+        const matchesType = !filterType || item.tipe === filterType;
+        const matchesDate = (!filterDateStart || item.tanggal >= filterDateStart) &&
+                            (!filterDateEnd || item.tanggal <= filterDateEnd);
+        
+        return matchesSearch && matchesType && matchesDate;
+      });
+    }
+
+    if (activeTab === 'panduan') {
+      return list.filter(item => {
+        return item.nama?.toLowerCase().includes(searchQuery.toLowerCase());
+      });
+    }
+
+    return list;
   };
+
+  const filteredItems = getFilteredItems();
 
   const exportToCSV = (tabName, items) => {
     let headers = [];
@@ -566,7 +597,8 @@ export default function App() {
     if (tabName === 'customers') {
       headers = ['Tanggal', 'Nama Pelanggan', 'No. Plat', 'Tipe Mobil', 'Warna', 'VIN', 'Paket Remap', 'Crew Pembawa', 'Tuner', 'Remote', 'Support', 'Nama Perantara', 'Fee Perantara'];
       rows = items.map(item => {
-        const p = data.panduan.find(x => x.id === item.paketId);
+        const targetId = item.paketId || item.paket_id;
+        const p = data.panduan.find(x => x.id === targetId);
         return [
           item.tanggal || '',
           item.nama || '',
@@ -578,35 +610,20 @@ export default function App() {
           item.crew || '',
           item.tuner || '',
           item.remote || '',
-          Array.isArray(item.support) ? item.support.join(', ') : (item.support || ''),
+          item.support || '',
           item.perantara || '',
-          item.perantaraFee || 0
+          item.perantaraFee || item.perantara_fee || 0
         ];
       });
     } else if (tabName === 'crews') {
       headers = ['Nama Crew', 'Posisi', 'Akumulasi Benefit'];
-      rows = items.map(item => [
-        item.nama || '',
-        item.posisi || '',
-        calculateCrewBenefit(item.nama)
-      ]);
+      rows = items.map(item => [item.nama || '', item.posisi || '', calculateCrewBenefit(item.nama)]);
     } else if (tabName === 'finance') {
       headers = ['Tanggal', 'Tipe', 'Plat', 'Crew', 'Keterangan', 'Nominal'];
-      rows = items.map(item => [
-        item.tanggal || '',
-        item.tipe || '',
-        item.plat || '-',
-        item.crew || '-',
-        item.keterangan || '',
-        item.amount || 0
-      ]);
+      rows = items.map(item => [item.tanggal || '', item.tipe || '', item.plat || '-', item.crew || '-', item.keterangan || '', item.amount || 0]);
     } else if (tabName === 'panduan') {
       headers = ['Nama Paket', 'Harga Remap', 'Benefit'];
-      rows = items.map(item => [
-        item.nama || '',
-        item.hargaRemap || 0,
-        item.benefit || 0
-      ]);
+      rows = items.map(item => [item.nama || '', item.hargaRemap || item.harga_remap || 0, item.benefit || 0]);
     }
     
     const csvContent = "\uFEFF" + [
@@ -632,9 +649,10 @@ export default function App() {
     let tableRowsHTML = '';
     
     if (tabName === 'customers') {
-      tableHeadersHTML = '<tr><th>Tanggal</th><th>Nama</th><th>No. Plat</th><th>Mobil</th><th>Warna</th><th>VIN</th><th>Paket</th><th>Crew Pembawa</th><th>Tuner</th><th>Remote</th><th>Support</th><th>Perantara</th><th>Fee</th></tr>';
+      tableHeadersHTML = '<tr><th>Tanggal</th><th>Nama</th><th>No. Plat</th><th>Mobil</th><th>Warna</th><th>VIN</th><th>Paket</th><th>Crew Pembawa</th><th>Tuner</th><th>Remote</th><th>Support</th><th>Perantara</th></tr>';
       tableRowsHTML = items.map(item => {
-        const p = data.panduan.find(x => x.id === item.paketId);
+        const targetId = item.paketId || item.paket_id;
+        const p = data.panduan.find(x => x.id === targetId);
         return `<tr>
           <td>${formatDateDisplay(item.tanggal)}</td>
           <td><b>${item.nama}</b></td>
@@ -644,11 +662,10 @@ export default function App() {
           <td style="font-family: monospace; font-size: 11px;">${item.vin || '-'}</td>
           <td>${p ? p.nama : '-'}</td>
           <td>${item.crew || '-'}</td>
-          <td style="color: #10b981; font-weight: 500;">${item.tuner || '-'}</td>
-          <td style="color: #06b6d4; font-weight: 500;">${item.remote || '-'}</td>
-          <td style="color: #6366f1; font-size: 11px;">${Array.isArray(item.support) ? item.support.join(', ') : (item.support || '-')}</td>
+          <td>${item.tuner || '-'}</td>
+          <td>${item.remote || '-'}</td>
+          <td>${item.support || '-'}</td>
           <td>${item.perantara || '-'}</td>
-          <td>${formatRupiah(item.perantaraFee || 0)}</td>
         </tr>`;
       }).join('');
     } else if (tabName === 'crews') {
@@ -662,135 +679,47 @@ export default function App() {
       tableHeadersHTML = '<tr><th>Tanggal</th><th>Tipe</th><th>Plat</th><th>Crew</th><th>Keterangan</th><th>Nominal</th></tr>';
       tableRowsHTML = items.map(item => `<tr>
         <td>${formatDateDisplay(item.tanggal)}</td>
-        <td><span style="font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: 4px; ${
-          item.tipe === 'Pemasukan' ? 'background: #d1fae5; color: #065f46;' : 
-          item.tipe === 'Pengeluaran' ? 'background: #fee2e2; color: #991b1b;' : 
-          'background: #fef3c7; color: #92400e;'
-        }">${item.tipe}</span></td>
-        <td><span style="font-family: monospace;">${item.plat || '-'}</span></td>
+        <td><b>${item.tipe}</b></td>
+        <td>${item.plat || '-'}</td>
         <td>${item.crew || '-'}</td>
         <td>${item.keterangan}</td>
-        <td style="font-weight: bold; ${item.tipe === 'Pengeluaran' ? 'color: #ef4444;' : 'color: #10b981;'}">
-          ${item.tipe === 'Pengeluaran' ? '-' : '+'}${formatRupiah(item.amount)}
-        </td>
+        <td>${formatRupiah(item.amount)}</td>
       </tr>`).join('');
     } else if (tabName === 'panduan') {
       tableHeadersHTML = '<tr><th>Nama Paket</th><th>Harga Remap</th><th>Benefit</th></tr>';
       tableRowsHTML = items.map(item => `<tr>
         <td><b>${item.nama}</b></td>
-        <td style="color: #f97316; font-weight: bold;">${formatRupiah(item.hargaRemap)}</td>
-        <td style="color: #10b981; font-weight: bold;">${formatRupiah(item.benefit)}</td>
+        <td>${formatRupiah(item.hargaRemap || item.harga_remap)}</td>
+        <td>${formatRupiah(item.benefit)}</td>
       </tr>`).join('');
     }
     
     printWindow.document.write(`
       <html>
         <head>
-          <title>Laporan TuningKhan - ${tabName.toUpperCase()}</title>
+          <title>TuningKhan Report - ${tabName.toUpperCase()}</title>
           <style>
-            body { font-family: 'Inter', system-ui, sans-serif; padding: 40px; color: #0f172a; background: #fff; }
+            body { font-family: sans-serif; padding: 40px; color: #0f172a; background: #fff; }
             h1 { font-size: 24px; color: #f97316; margin: 0; }
-            p { font-size: 12px; color: #64748b; margin: 5px 0 25px 0; }
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
             th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
-            th { background-color: #f8fafc; color: #475569; font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
-            .header-container { border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; }
-            @media print {
-              body { padding: 0; }
-            }
+            th { background-color: #f8fafc; color: #475569; }
           </style>
         </head>
         <body>
-          <div class="header-container">
-            <h1>TuningKhan Performance</h1>
-            <p>Laporan Resmi Manajemen ${tabName.charAt(0).toUpperCase() + tabName.slice(1)} | Dicetak: ${new Date().toLocaleDateString('id-ID')}</p>
-          </div>
+          <h1>Laporan TuningKhan Pro: ${tabName.toUpperCase()}</h1>
           <table>
-            <thead>
-              ${tableHeadersHTML}
-            </thead>
-            <tbody>
-              ${tableRowsHTML}
-            </tbody>
+            <thead>${tableHeadersHTML}</thead>
+            <tbody>${tableRowsHTML}</tbody>
           </table>
           <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
-            };
+            window.onload = function() { window.print(); setTimeout(window.close, 500); };
           </script>
         </body>
       </html>
     `);
     printWindow.document.close();
   };
-
-  const getFilteredItems = () => {
-    const list = data[activeTab] || [];
-    
-    if (activeTab === 'customers') {
-      return list.filter(item => {
-        const matchesSearch = 
-          item.nama?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.plat?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.mobil?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.vin?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.warna?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.crew?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.tuner?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.remote?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.perantara?.toLowerCase().includes(searchQuery.toLowerCase());
-        
-        const matchesCrew = !filterCrew || 
-          item.crew === filterCrew ||
-          item.tuner === filterCrew || 
-          item.remote === filterCrew ||
-          (Array.isArray(item.support) && item.support.includes(filterCrew)) ||
-          (typeof item.support === 'string' && item.support.split(',').map(s => s.trim()).includes(filterCrew));
-          
-        const matchesPaket = !filterPaket || item.paketId === filterPaket;
-        const matchesDate = (!filterDateStart || item.tanggal >= filterDateStart) &&
-                            (!filterDateEnd || item.tanggal <= filterDateEnd);
-        
-        return matchesSearch && matchesCrew && matchesPaket && matchesDate;
-      });
-    }
-
-    if (activeTab === 'crews') {
-      return list.filter(item => {
-        return item.nama?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-               item.posisi?.toLowerCase().includes(searchQuery.toLowerCase());
-      });
-    }
-
-    if (activeTab === 'finance') {
-      return list.filter(item => {
-        const matchesSearch = 
-          item.plat?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.crew?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.keterangan?.toLowerCase().includes(searchQuery.toLowerCase());
-        
-        const matchesCrew = !filterCrew || item.crew === filterCrew;
-        const matchesType = !filterType || item.tipe === filterType;
-        const matchesDate = (!filterDateStart || item.tanggal >= filterDateStart) &&
-                            (!filterDateEnd || item.tanggal <= filterDateEnd);
-        
-        return matchesSearch && matchesCrew && matchesType && matchesDate;
-      });
-    }
-
-    if (activeTab === 'panduan') {
-      return list.filter(item => {
-        return item.nama?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-               String(item.hargaRemap).includes(searchQuery) ||
-               String(item.benefit).includes(searchQuery);
-      });
-    }
-
-    return list;
-  };
-
-  const filteredItems = getFilteredItems();
 
   const renderDashboardStats = () => {
     const totalCustomers = data.customers.length;
@@ -856,17 +785,30 @@ export default function App() {
     );
   };
 
+  const formatDateDisplay = (dateStr) => {
+    if (!dateStr) return '-';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const monthNames = [
+      "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+      "Jul", "Agu", "Sep", "Okt", "Nov", "Des"
+    ];
+    return `${d.getDate()} ${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 flex font-sans text-slate-200">
       
-      {/* Sidebar navigation */}
+      {/* Sidebar Nav */}
       <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between">
         <div>
           <div className="p-6 border-b border-slate-800">
             <h1 className="text-2xl font-black flex items-center text-orange-500 tracking-tight">
               <Gauge className="mr-2 text-orange-500" size={28} /> Tuning<span className="text-slate-100 font-bold">Khan</span>
             </h1>
-            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-extrabold">Professional Remap</p>
+            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-extrabold flex items-center gap-1.5">
+              <span>Cloud Admin</span>
+            </p>
           </div>
           
           <nav className="p-4 space-y-2">
@@ -879,11 +821,11 @@ export default function App() {
             ].map((item) => (
               <button 
                 key={item.id}
-                onClick={() => handleTabChange(item.id)}
+                onClick={() => { setActiveTab(item.id); resetForm(); }}
                 className={`w-full flex items-center px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all ${
                   activeTab === item.id 
-                  ? 'bg-orange-600/10 text-orange-500 border border-orange-500/20 shadow-lg shadow-orange-500/5' 
-                  : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 border border-transparent'
+                  ? 'bg-orange-600/10 text-orange-500 border border-orange-500/20' 
+                  : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
                 }`}
               >
                 <item.icon size={18} className="mr-3" /> {item.name}
@@ -897,33 +839,26 @@ export default function App() {
         </div>
       </aside>
 
-      {/* Main Panel content header */}
+      {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden">
-        
         <header className="bg-slate-900 border-b border-slate-800 h-16 flex items-center justify-between px-8 shadow-md">
           <div className="flex items-center space-x-2">
-            <span className="h-2 w-2 rounded-full bg-orange-500 animate-pulse"></span>
+            <span className="h-2 w-2 rounded-full animate-pulse bg-orange-500"></span>
             <h2 className="text-lg font-bold text-slate-200 uppercase tracking-wider">{activeTab} Panel</h2>
           </div>
           
           <div className="flex items-center space-x-6">
-            <div className="relative cursor-pointer text-slate-400 hover:text-slate-200 transition">
-              <Bell size={20} />
-              <span className="absolute top-0 right-0 w-2 h-2 bg-orange-500 rounded-full"></span>
+            <div className="text-right">
+              <p className="text-sm font-semibold text-slate-200">Admin</p>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Super Control</p>
             </div>
-            <div className="h-8 w-px bg-slate-800"></div>
-            <div className="flex items-center space-x-3">
-              <div className="text-right">
-                <p className="text-sm font-semibold text-slate-200">Administrator</p>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Super Control</p>
-              </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center text-slate-950 font-black text-sm border-2 border-slate-800 shadow-md">
-                TK
-              </div>
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center text-slate-950 font-black text-sm border-2 border-slate-800">
+              TK
             </div>
           </div>
         </header>
 
+        {/* Dynamic Inner Panel Content */}
         <div className="flex-1 overflow-auto p-8">
           <div className="max-w-6xl mx-auto space-y-8">
             
@@ -932,17 +867,17 @@ export default function App() {
                 <p className="text-sm text-slate-400">Punya data baru untuk dimasukkan ke bagian {activeTab}?</p>
                 <button 
                   onClick={() => { resetForm(); setShowFormPanel(true); }} 
-                  className="bg-orange-600 text-slate-950 font-extrabold px-4 py-2 rounded-xl flex items-center hover:bg-orange-500 hover:scale-105 transition-all duration-300 shadow-lg shadow-orange-500/15"
+                  className="bg-orange-600 text-slate-950 font-extrabold px-4 py-2 rounded-xl flex items-center hover:bg-orange-500 hover:scale-105 transition shadow-lg"
                 >
                   <Plus size={16} className="mr-2" /> Tambah Baru
                 </button>
               </div>
             )}
 
-            {/* FORMULIR CRUD */}
+            {/* CRUDS Forms */}
             {showFormPanel && (
-              <div className="bg-slate-900 border-2 border-orange-500/30 p-6 rounded-xl shadow-xl transition-all duration-300">
-                <h3 className="text-base font-bold text-slate-100 border-b border-slate-800 pb-3 mb-4 flex items-center">
+              <div className="bg-slate-900 border-2 border-orange-500/30 p-6 rounded-xl shadow-xl">
+                <h3 className="text-base font-bold text-slate-100 border-b border-slate-850 pb-3 mb-4 flex items-center">
                   {editingId ? <Edit size={18} className="mr-2 text-orange-500" /> : <Plus size={18} className="mr-2 text-orange-500" />}
                   {editingId ? 'Edit Item' : 'Tambah Baru'} - <span className="capitalize text-orange-500 ml-1">{activeTab}</span>
                 </h3>
@@ -953,15 +888,15 @@ export default function App() {
                     <>
                       <div className="md:col-span-2">
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Paket / Layanan</label>
-                        <input type="text" name="nama" value={formData.nama || ''} onChange={handleInputChange} placeholder="Misal: Stage 1 Honda Brio / Stage 2 Fortuner" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                        <input type="text" name="nama" value={formData.nama || ''} onChange={handleInputChange} placeholder="Misal: Stage 1 Honda Brio" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Harga Remap (Rp)</label>
-                        <input type="number" name="hargaRemap" value={formData.hargaRemap || ''} onChange={handleInputChange} placeholder="Contoh: 1500000" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                        <input type="number" name="hargaRemap" value={formData.hargaRemap || formData.harga_remap || ''} onChange={handleInputChange} placeholder="1500000" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Benefit (Rp)</label>
-                        <input type="number" name="benefit" value={formData.benefit || ''} onChange={handleInputChange} placeholder="Contoh: 300000" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                        <input type="number" name="benefit" value={formData.benefit || ''} onChange={handleInputChange} placeholder="300000" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
                       </div>
                     </>
                   )}
@@ -985,7 +920,7 @@ export default function App() {
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tipe Mobil</label>
-                        <input type="text" name="mobil" value={formData.mobil || ''} onChange={handleInputChange} placeholder="Innova Reborn / Civic Turbo" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                        <input type="text" name="mobil" value={formData.mobil || ''} onChange={handleInputChange} placeholder="Innova Reborn" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Warna Mobil</label>
@@ -1001,14 +936,14 @@ export default function App() {
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Lokasi Remap</label>
-                        <input type="text" name="location" value={formData.location || ''} onChange={handleInputChange} placeholder="Bengkel Utama / Home Service" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                        <input type="text" name="location" value={formData.location || ''} onChange={handleInputChange} placeholder="Bengkel Utama" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pilihan Paket Remap</label>
-                        <select name="paketId" value={formData.paketId || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                        <select name="paketId" value={formData.paketId || formData.paket_id || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
                           <option value="">-- Pilih Paket Panduan --</option>
                           {data.panduan.map(p => (
-                            <option key={p.id} value={p.id}>{p.nama} (Remap: {formatRupiah(p.hargaRemap)})</option>
+                            <option key={p.id} value={p.id}>{p.nama} (Remap: {formatRupiah(p.hargaRemap || p.harga_remap || 0)})</option>
                           ))}
                         </select>
                       </div>
@@ -1045,10 +980,10 @@ export default function App() {
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Fee Perantara (Rp) (Opsional)</label>
-                        <input type="number" name="perantaraFee" value={formData.perantaraFee || ''} onChange={handleInputChange} placeholder="Contoh: 100000" className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                        <input type="number" name="perantaraFee" value={formData.perantaraFee || formData.perantara_fee || ''} onChange={handleInputChange} placeholder="Contoh: 100000" className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
                       </div>
 
-                      {/* Interactive support checklist box */}
+                      {/* Checklist Support Crew */}
                       <div className="md:col-span-2">
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Pilihan Support (Rp50.000 Benefit, Bisa Lebih Dari 1)</label>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-slate-950 border border-slate-800 p-3 rounded-lg max-h-40 overflow-y-auto">
@@ -1093,7 +1028,7 @@ export default function App() {
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Posisi / Jabatan</label>
-                        <input type="text" name="posisi" value={formData.posisi || ''} onChange={handleInputChange} placeholder="Tuner / Teknisi / Admin" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                        <input type="text" name="posisi" value={formData.posisi || ''} onChange={handleInputChange} placeholder="Tuner / Teknisi" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
                       </div>
                     </>
                   )}
@@ -1109,7 +1044,6 @@ export default function App() {
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tipe Alur Kas</label>
-                        {/* Menjadikan hanya 2 pilihan: Pemasukan dan Pengeluaran sesuai permintaan */}
                         <select name="tipe" value={formData.tipe || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
                           <option value="">-- Pilih Tipe --</option>
                           <option value="Pemasukan">Pemasukan</option>
@@ -1145,9 +1079,9 @@ export default function App() {
                     </>
                   )}
 
-                  <div className="md:col-span-2 flex justify-end gap-3 mt-4 border-t border-slate-800 pt-4">
+                  <div className="md:col-span-2 flex justify-end gap-3 mt-4 border-t border-slate-850 pt-4">
                     <button type="button" onClick={handleCancelClick} className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl hover:text-slate-200 transition">Batal</button>
-                    <button type="submit" className="px-5 py-2 bg-orange-600 text-slate-950 font-bold rounded-xl hover:bg-orange-500 transition-all shadow-md shadow-orange-500/10">
+                    <button type="submit" className="px-5 py-2 bg-orange-600 text-slate-950 font-bold rounded-xl hover:bg-orange-500 transition shadow-md">
                       {editingId ? 'Update Data' : 'Simpan Data'}
                     </button>
                   </div>
@@ -1155,9 +1089,10 @@ export default function App() {
               </div>
             )}
 
-            {/* TAB-SPECIFIC KONTROL DAN PANEL */}
+            {/* Render Tab List */}
             {activeTab !== 'dashboard' && (
-              <div className="space-y-4">
+              /* Render Other Tabs with filters and lists */
+              <div className="space-y-6">
                 
                 {/* MENU STATS KEUNGAN YANG DINAMIS DAN TRANSPARAN */}
                 {activeTab === 'finance' && (
@@ -1195,234 +1130,209 @@ export default function App() {
                     <div className="bg-slate-950/60 p-4 border border-indigo-500/10 rounded-xl flex flex-col justify-between">
                       <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Benefit Crew</p>
                       <h3 className="text-xl font-extrabold text-indigo-400 mt-2">{formatRupiah(financialStats.totalBenefit)}</h3>
-                      <p className="text-[9px] text-slate-500 mt-1">Manual + Otomatis Peran</p>
+                      <p className="text-[9px] text-slate-500 mt-1 font-mono">Otomatis Peran Customer</p>
                     </div>
                   </div>
                 )}
 
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  <div className="flex flex-wrap items-center gap-3 flex-1">
-                    
-                    {/* Global Search Input */}
-                    <div className="relative flex-1 min-w-[200px] max-w-sm">
-                      <Search className="absolute left-3 top-2.5 text-slate-600" size={18} />
-                      <input 
-                        type="text" 
-                        placeholder="Cari data..." 
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-orange-500"
-                      />
+                {!showFormPanel && (
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="flex flex-wrap items-center gap-3 flex-1">
+                      
+                      {/* Search */}
+                      <div className="relative flex-1 min-w-[200px] max-w-sm">
+                        <Search className="absolute left-3 top-2.5 text-slate-600" size={18} />
+                        <input 
+                          type="text" 
+                          placeholder="Cari data..." 
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-850 rounded-xl py-2 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-orange-500"
+                        />
+                      </div>
+
+                      {/* Dropdown Filters */}
+                      {activeTab === 'customers' && (
+                        <select value={filterCrew} onChange={e => setFilterCrew(e.target.value)} className="bg-slate-950 border border-slate-850 rounded-xl p-2 text-xs text-slate-300">
+                          <option value="">Semua Crew</option>
+                          {data.crews.map(c => <option key={c.id} value={c.nama}>{c.nama}</option>)}
+                        </select>
+                      )}
+
+                      {activeTab === 'finance' && (
+                        <select value={filterType} onChange={e => setFilterType(e.target.value)} className="bg-slate-950 border border-slate-850 rounded-xl p-2 text-xs text-slate-300">
+                          <option value="">Semua Tipe</option>
+                          <option value="Pemasukan">Pemasukan</option>
+                          <option value="Pengeluaran">Pengeluaran</option>
+                        </select>
+                      )}
+
+                      {/* Date Filter */}
+                      {(activeTab === 'customers' || activeTab === 'finance') && (
+                        <div className="flex items-center gap-2">
+                          <div className="w-36">
+                            <DatePicker value={filterDateStart} onChange={setFilterDateStart} placeholder="Dari Tgl" />
+                          </div>
+                          <span className="text-slate-600 text-xs">-</span>
+                          <div className="w-36">
+                            <DatePicker value={filterDateEnd} onChange={setFilterDateEnd} placeholder="S/D Tgl" />
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    {activeTab === 'customers' && (
-                      <select
-                        value={filterCrew}
-                        onChange={(e) => setFilterCrew(e.target.value)}
-                        className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-slate-300 focus:outline-none focus:border-orange-500"
+                    {/* Export Actions */}
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => exportToCSV(activeTab, filteredItems)}
+                        className="bg-slate-950 border border-slate-800 hover:border-emerald-500/30 hover:bg-emerald-500/10 text-slate-300 hover:text-emerald-400 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2"
                       >
-                        <option value="">Semua Crew</option>
-                        {data.crews.map(c => <option key={c.id} value={c.nama}>{c.nama}</option>)}
-                      </select>
-                    )}
-
-                    {(activeTab === 'customers' || activeTab === 'finance') && (
-                      <div className="flex items-center gap-2">
-                        <div className="w-40">
-                          <DatePicker 
-                            value={filterDateStart} 
-                            onChange={setFilterDateStart} 
-                            placeholder="Mulai Tanggal" 
-                          />
-                        </div>
-                        <span className="text-slate-600 text-xs font-bold">-</span>
-                        <div className="w-40">
-                          <DatePicker 
-                            value={filterDateEnd} 
-                            onChange={setFilterDateEnd} 
-                            placeholder="Sampai Tanggal" 
-                          />
-                        </div>
-                      </div>
-                    )}
-
+                        <Download size={14} /> <span>Excel</span>
+                      </button>
+                      <button 
+                        onClick={() => exportToPDF(activeTab, filteredItems)}
+                        className="bg-slate-950 border border-slate-800 hover:border-orange-500/30 hover:bg-orange-500/10 text-slate-300 hover:text-orange-400 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2"
+                      >
+                        <Printer size={14} /> <span>PDF</span>
+                      </button>
+                    </div>
                   </div>
+                )}
 
-                  {/* Export Buttons UI */}
-                  <div className="flex items-center gap-2">
-                    <button 
-                      onClick={() => exportToCSV(activeTab, filteredItems)}
-                      className="bg-slate-950 border border-slate-800 hover:border-emerald-500/30 hover:bg-emerald-500/10 text-slate-300 hover:text-emerald-400 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2"
-                      title="Ekspor ke format Excel (CSV)"
-                    >
-                      <Download size={14} />
-                      <span>Excel</span>
-                    </button>
-                    <button 
-                      onClick={() => exportToPDF(activeTab, filteredItems)}
-                      className="bg-slate-950 border border-slate-800 hover:border-orange-500/30 hover:bg-orange-500/10 text-slate-300 hover:text-orange-400 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2"
-                      title="Cetak Laporan / Simpan PDF"
-                    >
-                      <Printer size={14} />
-                      <span>PDF</span>
-                    </button>
-                  </div>
+                {/* Table list */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-850 border-b border-slate-850 text-slate-400 uppercase text-[10px] font-bold tracking-widest">
+                          {activeTab === 'customers' && (
+                            <>
+                              <th className="p-4">Tanggal</th>
+                              <th className="p-4">Nama Pelanggan</th>
+                              <th className="p-4">No. Plat</th>
+                              <th className="p-4">Kendaraan</th>
+                              <th className="p-4">Warna</th>
+                              <th className="p-4">VIN</th>
+                              <th className="p-4">Paket</th>
+                              <th className="p-4">Crew Pembawa</th>
+                              <th className="p-4">Tuner</th>
+                              <th className="p-4">Remote</th>
+                              <th className="p-4">Support</th>
+                              <th className="p-4">Perantara</th>
+                              <th className="p-4">Fee</th>
+                              <th className="p-4 text-right">Aksi</th>
+                            </>
+                          )}
+                          {activeTab === 'crews' && (
+                            <>
+                              <th className="p-4">Nama Crew</th>
+                              <th className="p-4">Posisi</th>
+                              <th className="p-4">Akumulasi Benefit</th>
+                              <th className="p-4 text-right">Aksi</th>
+                            </>
+                          )}
+                          {activeTab === 'finance' && (
+                            <>
+                              <th className="p-4">Tanggal</th>
+                              <th className="p-4">Tipe</th>
+                              <th className="p-4">Plat</th>
+                              <th className="p-4">Penerima</th>
+                              <th className="p-4">Keterangan</th>
+                              <th className="p-4">Nominal</th>
+                              <th className="p-4 text-right">Aksi</th>
+                            </>
+                          )}
+                          {activeTab === 'panduan' && (
+                            <>
+                              <th className="p-4">Nama Layanan</th>
+                              <th className="p-4">Harga Remap</th>
+                              <th className="p-4">Benefit</th>
+                              <th className="p-4 text-right">Aksi</th>
+                            </>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredItems.length === 0 ? (
+                          <tr>
+                            <td colSpan="100%" className="p-8 text-center text-slate-600 italic text-sm">Tidak ada data ditemukan.</td>
+                          </tr>
+                        ) : (
+                          filteredItems.map(item => (
+                            <tr key={item.id} className="border-b border-slate-850 hover:bg-slate-800/10 transition">
+                              {activeTab === 'customers' && (
+                                <>
+                                  <td className="p-4 text-slate-400 text-xs font-mono">{formatDateDisplay(item.tanggal)}</td>
+                                  <td className="p-4 font-bold text-slate-200">{item.nama}</td>
+                                  <td className="p-4 font-mono text-xs"><span className="bg-slate-950 border border-slate-850 px-2 py-1 rounded text-orange-400">{item.plat}</span></td>
+                                  <td className="p-4 text-slate-400 text-sm">{item.mobil}</td>
+                                  <td className="p-4 text-slate-400 text-sm">{item.warna || '-'}</td>
+                                  <td className="p-4 font-mono text-xs text-slate-400">{item.vin || '-'}</td>
+                                  <td className="p-4 text-slate-300 text-sm">
+                                    {(() => {
+                                      const p = data.panduan.find(x => x.id === (item.paketId || item.paket_id));
+                                      return p ? p.nama : '-';
+                                    })()}
+                                  </td>
+                                  <td className="p-4 text-slate-400 text-sm">{item.crew || '-'}</td>
+                                  <td className="p-4 text-emerald-400 font-medium">{item.tuner || '-'}</td>
+                                  <td className="p-4 text-cyan-400 font-medium">{item.remote || '-'}</td>
+                                  <td className="p-4 text-indigo-400 text-sm max-w-[150px] truncate" title={item.support || '-'}>{item.support || '-'}</td>
+                                  <td className="p-4 text-slate-400 text-sm">{item.perantara || '-'}</td>
+                                  <td className="p-4 text-slate-400 text-sm">{formatRupiah(item.perantaraFee || item.perantara_fee || 0)}</td>
+                                </>
+                              )}
+                              {activeTab === 'crews' && (
+                                <>
+                                  <td className="p-4 font-bold text-slate-200">{item.nama}</td>
+                                  <td className="p-4 text-slate-400 text-sm">{item.posisi}</td>
+                                  <td className="p-4 font-extrabold text-emerald-400">{formatRupiah(calculateCrewBenefit(item.nama))}</td>
+                                </>
+                              )}
+                              {activeTab === 'finance' && (
+                                <>
+                                  <td className="p-4 text-slate-400 text-xs font-mono">{formatDateDisplay(item.tanggal)}</td>
+                                  <td className="p-4">
+                                    <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider
+                                      ${item.tipe === 'Pemasukan' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
+                                        'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                                      {item.tipe}
+                                    </span>
+                                  </td>
+                                  <td className="p-4 font-mono text-xs text-slate-400">{item.plat || '-'}</td>
+                                  <td className="p-4 text-slate-300 text-sm">{item.crew || '-'}</td>
+                                  <td className="p-4 text-slate-400 text-xs">{item.keterangan}</td>
+                                  <td className={`p-4 font-extrabold ${item.tipe === 'Pengeluaran' ? 'text-red-400' : 'text-emerald-400'}`}>
+                                    {item.tipe === 'Pengeluaran' ? '-' : '+'}{formatRupiah(item.amount)}
+                                  </td>
+                                </>
+                              )}
+                              {activeTab === 'panduan' && (
+                                <>
+                                  <td className="p-4 font-bold text-slate-200">{item.nama}</td>
+                                  <td className="p-4 text-orange-400 font-bold">{formatRupiah(item.hargaRemap || item.harga_remap)}</td>
+                                  <td className="p-4 text-emerald-400 font-bold">{formatRupiah(item.benefit)}</td>
+                                </>
+                              )}
 
-                </div>
-              </div>
-            )}
-
-            {}
-            {activeTab === 'dashboard' ? (
-              renderDashboardStats()
-            ) : (
-              <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-850 border-b border-slate-800 text-slate-400 uppercase text-[10px] font-bold tracking-widest">
-                        
-                        {activeTab === 'panduan' && (
-                          <>
-                            <th className="p-4">Nama Paket</th>
-                            <th className="p-4">Harga Remap</th>
-                            <th className="p-4">Benefit</th>
-                          </>
-                        )}
-
-                        {activeTab === 'customers' && (
-                          <>
-                            <th className="p-4">Tanggal</th>
-                            <th className="p-4">Nama Pelanggan</th>
-                            <th className="p-4">No. Plat</th>
-                            <th className="p-4">Tipe Mobil</th>
-                            <th className="p-4">Warna</th>
-                            <th className="p-4">VIN</th>
-                            <th className="p-4">Paket</th>
-                            <th className="p-4">Crew Pembawa</th>
-                            <th className="p-4">Tuner</th>
-                            <th className="p-4">Remote</th>
-                            <th className="p-4">Support</th>
-                            <th className="p-4">Perantara</th>
-                            <th className="p-4">Fee Perantara</th>
-                          </>
-                        )}
-
-                        {activeTab === 'crews' && (
-                          <>
-                            <th className="p-4">Nama Anggota Crew</th>
-                            <th className="p-4">Posisi</th>
-                            <th className="p-4">Akumulasi Benefit</th>
-                          </>
-                        )}
-
-                        {activeTab === 'finance' && (
-                          <>
-                            <th className="p-4">Tanggal</th>
-                            <th className="p-4">Tipe</th>
-                            <th className="p-4">No. Plat</th>
-                            <th className="p-4">Penerima</th>
-                            <th className="p-4">Keterangan</th>
-                            <th className="p-4">Nominal</th>
-                          </>
-                        )}
-                        
-                        <th className="p-4 text-right">Tindakan</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(() => {
-                        if (filteredItems.length === 0) {
-                          return (
-                            <tr>
-                              <td colSpan="100%" className="p-8 text-center text-slate-600 italic text-sm">
-                                Tidak ada data yang ditemukan di bagian ini.
+                              <td className="p-4 text-right">
+                                <div className="flex justify-end gap-2">
+                                  <button onClick={() => {
+                                    const prepItem = { ...item };
+                                    if (prepItem.support && typeof prepItem.support === 'string') {
+                                      prepItem.support = prepItem.support.split(',').map(s => s.trim());
+                                    }
+                                    handleEdit(prepItem);
+                                  }} className="p-1 text-slate-400 hover:text-orange-500 rounded transition"><Edit size={16} /></button>
+                                  <button onClick={() => setDeleteModal({ show: true, item, menu: activeTab })} className="p-1 text-slate-400 hover:text-red-500 rounded transition"><Trash2 size={16} /></button>
+                                </div>
                               </td>
                             </tr>
-                          );
-                        }
-
-                        return filteredItems.map((item) => (
-                          <tr key={item.id} className="border-b border-slate-800/60 hover:bg-slate-800/20 transition-all duration-200">
-                            
-                            {activeTab === 'panduan' && (
-                              <>
-                                <td className="p-4 font-bold text-slate-200">{item.nama}</td>
-                                <td className="p-4 text-orange-400 font-semibold">{formatRupiah(item.hargaRemap)}</td>
-                                <td className="p-4 text-emerald-400 font-semibold">{formatRupiah(item.benefit)}</td>
-                              </>
-                            )}
-
-                            {activeTab === 'customers' && (
-                              <>
-                                <td className="p-4 text-slate-400 text-xs">{formatDateDisplay(item.tanggal)}</td>
-                                <td className="p-4 font-bold text-slate-200">{item.nama}</td>
-                                <td className="p-4 font-mono text-xs">
-                                  <span className="bg-slate-950 border border-slate-800 px-2 py-1 rounded text-orange-400 font-semibold">{item.plat}</span>
-                                </td>
-                                <td className="p-4 text-slate-400">{item.mobil}</td>
-                                <td className="p-4 text-slate-400">{item.warna || '-'}</td>
-                                <td className="p-4 font-mono text-xs text-slate-400">{item.vin || '-'}</td>
-                                <td className="p-4 text-slate-300">
-                                  {(() => {
-                                    const p = data.panduan.find(x => x.id === item.paketId);
-                                    return p ? p.nama : '-';
-                                  })()}
-                                </td>
-                                <td className="p-4 text-slate-400">{item.crew || '-'}</td>
-                                <td className="p-4 text-emerald-400 font-medium">{item.tuner || '-'}</td>
-                                <td className="p-4 text-cyan-400 font-medium">{item.remote || '-'}</td>
-                                <td className="p-4 text-indigo-400 text-sm max-w-[150px] truncate" title={Array.isArray(item.support) ? item.support.join(', ') : (item.support || '-')}>
-                                  {Array.isArray(item.support) ? item.support.join(', ') : (item.support || '-')}
-                                </td>
-                                <td className="p-4 text-slate-400">{item.perantara || '-'}</td>
-                                <td className="p-4 text-slate-400">{formatRupiah(item.perantaraFee || 0)}</td>
-                              </>
-                            )}
-
-                            {activeTab === 'crews' && (
-                              <>
-                                <td className="p-4 font-bold text-slate-200">{item.nama}</td>
-                                <td className="p-4 text-slate-400">{item.posisi}</td>
-                                <td className="p-4 font-extrabold text-emerald-400">{formatRupiah(calculateCrewBenefit(item.nama))}</td>
-                              </>
-                            )}
-
-                            {activeTab === 'finance' && (
-                              <>
-                                <td className="p-4 text-slate-400 text-xs">{formatDateDisplay(item.tanggal)}</td>
-                                <td className="p-4">
-                                  <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider
-                                    ${item.tipe === 'Pemasukan' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
-                                      item.tipe === 'Pengeluaran' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 
-                                      'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
-                                    {item.tipe}
-                                  </span>
-                                </td>
-                                <td className="p-4 font-mono text-xs">{item.plat || '-'}</td>
-                                <td className="p-4 text-slate-300">{item.crew || '-'}</td>
-                                <td className="p-4 text-slate-400 text-sm">{item.keterangan}</td>
-                                <td className={`p-4 font-extrabold ${item.tipe === 'Pengeluaran' ? 'text-red-400' : 'text-emerald-400'}`}>
-                                  {item.tipe === 'Pengeluaran' ? '-' : '+'}{formatRupiah(item.amount)}
-                                </td>
-                              </>
-                            )}
-
-                            <td className="p-4 text-right">
-                              <div className="flex justify-end gap-2">
-                                <button onClick={() => handleEdit(item)} className="p-1.5 text-slate-400 hover:bg-slate-800 hover:text-orange-500 rounded-lg transition" title="Edit">
-                                  <Edit size={16} />
-                                </button>
-                                <button onClick={() => confirmDelete(item, activeTab)} className="p-1.5 text-slate-400 hover:bg-slate-800 hover:text-red-500 rounded-lg transition" title="Hapus">
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ));
-                      })()}
-                    </tbody>
-                  </table>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
@@ -1431,7 +1341,7 @@ export default function App() {
         </div>
       </main>
 
-      {}
+      {/* CONFIRMATION MODALS */}
       {deleteModal.show && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-sm w-full p-6 relative">
@@ -1443,15 +1353,11 @@ export default function App() {
               <h3 className="text-lg font-bold">Hapus Data Permanen?</h3>
             </div>
             <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-              Tindakan ini tidak dapat dibatalkan. Menghapus item ini akan melenyapkan data terkait dari database bengkel.
+              Tindakan ini tidak dapat dibatalkan. Menghapus item ini akan melenyapkan data terkait dari database cloud secara permanen.
             </p>
             <div className="flex justify-end gap-3">
-              <button onClick={() => setDeleteModal({ show: false, item: null, menu: '' })} className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl hover:text-slate-200 transition">
-                Batal
-              </button>
-              <button onClick={executeDelete} className="px-4 py-2 bg-red-600 text-slate-100 rounded-xl font-bold hover:bg-red-500 transition">
-                Ya, Hapus
-              </button>
+              <button onClick={() => setDeleteModal({ show: false, item: null, menu: '' })} className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl hover:text-slate-200 transition">Batal</button>
+              <button onClick={executeDelete} className="px-4 py-2 bg-red-600 text-slate-100 rounded-xl font-bold hover:bg-red-500 transition">Ya, Hapus</button>
             </div>
           </div>
         </div>
@@ -1468,30 +1374,16 @@ export default function App() {
               <h3 className="text-lg font-bold">Batalkan Input Data?</h3>
             </div>
             <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-              Anda sedang mengetik atau mengedit data. Apakah Anda yakin ingin membuang semua perubahan yang belum disimpan ini?
+              Anda sedang mengetik data baru. Apakah Anda yakin ingin membuang semua perubahan yang belum disimpan?
             </p>
             <div className="flex justify-end gap-3">
-              <button onClick={() => setCancelConfirmModal(false)} className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl hover:text-slate-200 transition">
-                Kembali Lanjutkan
-              </button>
-              <button onClick={resetForm} className="px-4 py-2 bg-amber-600 text-slate-950 font-bold rounded-xl hover:bg-amber-500 transition">
-                Ya, Batalkan
-              </button>
+              <button onClick={() => setCancelConfirmModal(false)} className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl hover:text-slate-200 transition">Kembali Lanjutkan</button>
+              <button onClick={resetForm} className="px-4 py-2 bg-amber-600 text-slate-950 font-bold rounded-xl hover:bg-amber-500 transition">Ya, Batalkan</button>
             </div>
           </div>
         </div>
       )}
 
     </div>
-  );
-}
-
-function AlertTriangle({ size, className }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-      <line x1="12" y1="9" x2="12" y2="13" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
-    </svg>
   );
 }
