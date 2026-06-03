@@ -22,6 +22,22 @@ import {
   Info
 } from 'lucide-react';
 
+import { 
+  ResponsiveContainer, 
+  AreaChart, 
+  Area, 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
+
 function DatePicker({ value, onChange, placeholder = "Pilih Tanggal" }) {
   const [isOpen, setIsOpen] = useState(false);
   const [viewDate, setViewDate] = useState(() => value ? new Date(value) : new Date());
@@ -149,10 +165,6 @@ function DatePicker({ value, onChange, placeholder = "Pilih Tanggal" }) {
   );
 }
 
-/**
- * Fungsi pembantu untuk membuat log transaksi keuangan otomatis
- * berdasarkan input penugasan kru di form pelanggan (Customer).
- */
 const generateAutoFinanceLogs = (customer, panduanList) => {
   const logs = [];
   const baseId = customer.id;
@@ -252,6 +264,50 @@ const generateAutoFinanceLogs = (customer, panduanList) => {
   return logs;
 };
 
+const defaultMockData = {
+  customers: [
+    { id: 'm1', tanggal: '2026-05-28', nama: 'Budi Santoso', plat: 'B 1234 SMN', mobil: 'Innova Reborn 2.4D', warna: 'Hitam Metalik', vin: 'MHR17KLA192837', phone: '08123456789', location: 'Bengkel Utama', paketId: 'p1', crew: 'Ahmad', tuner: 'Eko', remote: 'Fandi', support: ['Gani'], perantara: 'Deni', perantaraFee: '100000' },
+    { id: 'm2', tanggal: '2026-05-29', nama: 'Siti Aminah', plat: 'D 9999 XYZ', mobil: 'Civic Turbo 1.5T', warna: 'Merah Candy', vin: 'MHR17KLA192004', phone: '08234567890', location: 'Home Service', paketId: 'p2', crew: 'Eko', tuner: 'Eko', remote: '', support: [], perantara: '', perantaraFee: '0' },
+    { id: 'm3', tanggal: '2026-05-31', nama: 'Andi Wijaya', plat: 'F 888 WA', mobil: 'Fortuner VRZ 2.4', warna: 'Putih Super', vin: 'MHR17KLA195821', phone: '08345678901', location: 'Bengkel Utama', paketId: 'p3', crew: 'Ahmad', tuner: 'Eko', remote: 'Fandi', support: ['Gani', 'Hadi'], perantara: 'Roni', perantaraFee: '150000' },
+    { id: 'm4', tanggal: '2026-06-01', nama: 'Dewi Lestari', plat: 'B 2234 CDE', mobil: 'Honda Brio 1.2', warna: 'Kuning Lemon', vin: 'MHR17KLA197261', phone: '08456789012', location: 'Bengkel Utama', paketId: 'p4', crew: 'Gani', tuner: 'Eko', remote: '', support: ['Ahmad'], perantara: '', perantaraFee: '0' }
+  ],
+  crews: [
+    { id: 'c1', nama: 'Ahmad', posisi: 'Teknisi Senior' },
+    { id: 'c2', nama: 'Eko', posisi: 'Master Tuner' },
+    { id: 'c3', nama: 'Fandi', posisi: 'Remote Programmer' },
+    { id: 'c4', nama: 'Gani', posisi: 'Asisten Mekanik' },
+    { id: 'c5', nama: 'Hadi', posisi: 'Support Crew' }
+  ],
+  finance: [
+    { id: 'm1-masuk', tanggal: '2026-05-28', tipe: 'Pemasukan', plat: 'B 1234 SMN', crew: 'Ahmad', amount: 2500000, keterangan: 'Pemasukan Remap: Stage 1 Performance (B 1234 SMN)', isAuto: true },
+    { id: 'm1-benefit-pembawa', tanggal: '2026-05-28', tipe: 'Pengeluaran', plat: 'B 1234 SMN', crew: 'Ahmad', amount: 500000, keterangan: 'Benefit Crew Pembawa: Ahmad (B 1234 SMN)', isAuto: true },
+    { id: 'm1-benefit-tuner', tanggal: '2026-05-28', tipe: 'Pengeluaran', plat: 'B 1234 SMN', crew: 'Eko', amount: 250000, keterangan: 'Benefit Tuner: Eko (B 1234 SMN)', isAuto: true },
+    { id: 'm1-benefit-remote', tanggal: '2026-05-28', tipe: 'Pengeluaran', plat: 'B 1234 SMN', crew: 'Fandi', amount: 150000, keterangan: 'Benefit Remote: Fandi (B 1234 SMN)', isAuto: true },
+    { id: 'm1-benefit-support-0', tanggal: '2026-05-28', tipe: 'Pengeluaran', plat: 'B 1234 SMN', crew: 'Gani', amount: 50000, keterangan: 'Benefit Support: Gani (B 1234 SMN)', isAuto: true },
+    { id: 'm1-fee-perantara', tanggal: '2026-05-28', tipe: 'Pengeluaran', plat: 'B 1234 SMN', crew: 'Ahmad', amount: 100000, keterangan: 'Fee Perantara: Deni (B 1234 SMN)', isAuto: true },
+    { id: 'm2-masuk', tanggal: '2026-05-29', tipe: 'Pemasukan', plat: 'D 9999 XYZ', crew: 'Eko', amount: 3500000, keterangan: 'Pemasukan Remap: Stage 2 Extreme (D 9999 XYZ)', isAuto: true },
+    { id: 'm2-benefit-pembawa', tanggal: '2026-05-29', tipe: 'Pengeluaran', plat: 'D 9999 XYZ', crew: 'Eko', amount: 750000, keterangan: 'Benefit Crew Pembawa: Eko (D 9999 XYZ)', isAuto: true },
+    { id: 'm2-benefit-tuner', tanggal: '2026-05-29', tipe: 'Pengeluaran', plat: 'D 9999 XYZ', crew: 'Eko', amount: 250000, keterangan: 'Benefit Tuner: Eko (D 9999 XYZ)', isAuto: true },
+    { id: 'm3-masuk', tanggal: '2026-05-31', tipe: 'Pemasukan', plat: 'F 888 WA', crew: 'Ahmad', amount: 4000000, keterangan: 'Pemasukan Remap: Stage 2 Pro (F 888 WA)', isAuto: true },
+    { id: 'm3-benefit-pembawa', tanggal: '2026-05-31', tipe: 'Pengeluaran', plat: 'F 888 WA', crew: 'Ahmad', amount: 800000, keterangan: 'Benefit Crew Pembawa: Ahmad (F 888 WA)', isAuto: true },
+    { id: 'm3-benefit-tuner', tanggal: '2026-05-31', tipe: 'Pengeluaran', plat: 'F 888 WA', crew: 'Eko', amount: 250000, keterangan: 'Benefit Tuner: Eko (F 888 WA)', isAuto: true },
+    { id: 'm3-benefit-remote', tanggal: '2026-05-31', tipe: 'Pengeluaran', plat: 'F 888 WA', crew: 'Fandi', amount: 150000, keterangan: 'Benefit Remote: Fandi (F 888 WA)', isAuto: true },
+    { id: 'm3-benefit-support-0', tanggal: '2026-05-31', tipe: 'Pengeluaran', plat: 'F 888 WA', crew: 'Gani', amount: 50000, keterangan: 'Benefit Support: Gani (F 888 WA)', isAuto: true },
+    { id: 'm3-benefit-support-1', tanggal: '2026-05-31', tipe: 'Pengeluaran', plat: 'F 888 WA', crew: 'Hadi', amount: 50000, keterangan: 'Benefit Support: Hadi (F 888 WA)', isAuto: true },
+    { id: 'm3-fee-perantara', tanggal: '2026-05-31', tipe: 'Pengeluaran', plat: 'F 888 WA', crew: 'Ahmad', amount: 150000, keterangan: 'Fee Perantara: Roni (F 888 WA)', isAuto: true },
+    { id: 'm4-masuk', tanggal: '2026-06-01', tipe: 'Pemasukan', plat: 'B 2234 CDE', crew: 'Gani', amount: 1800000, keterangan: 'Pemasukan Remap: Stage 1 Eco (B 2234 CDE)', isAuto: true },
+    { id: 'm4-benefit-pembawa', tanggal: '2026-06-01', tipe: 'Pengeluaran', plat: 'B 2234 CDE', crew: 'Gani', amount: 400000, keterangan: 'Benefit Crew Pembawa: Gani (B 2234 CDE)', isAuto: true },
+    { id: 'm4-benefit-tuner', tanggal: '2026-06-01', tipe: 'Pengeluaran', plat: 'B 2234 CDE', crew: 'Eko', amount: 250000, keterangan: 'Benefit Tuner: Eko (B 2234 CDE)', isAuto: true },
+    { id: 'm4-benefit-support-0', tanggal: '2026-06-01', tipe: 'Pengeluaran', plat: 'B 2234 CDE', crew: 'Ahmad', amount: 50000, keterangan: 'Benefit Support: Ahmad (B 2234 CDE)', isAuto: true }
+  ],
+  panduan: [
+    { id: 'p1', nama: 'Stage 1 Performance', hargaRemap: 2500000, benefit: 500000 },
+    { id: 'p2', nama: 'Stage 2 Extreme', hargaRemap: 3500000, benefit: 750000 },
+    { id: 'p3', nama: 'Stage 2 Pro', hargaRemap: 4000000, benefit: 800000 },
+    { id: 'p4', nama: 'Stage 1 Eco', hargaRemap: 1800000, benefit: 400000 }
+  ]
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showFormPanel, setShowFormPanel] = useState(false);
@@ -267,21 +323,17 @@ export default function App() {
   const [filterDateEnd, setFilterDateEnd] = useState('');
   const [filterPaket, setFilterPaket] = useState('');
 
-  // Initial Data dari LocalStorage
+  // Initial Data dari LocalStorage dengan fallback data tiruan (Mock) lengkap
   const [data, setData] = useState(() => {
     const saved = localStorage.getItem('tuningkhan_pro');
-    const initialData = {
-      customers: [],
-      crews: [],
-      finance: [],
-      panduan: []
-    };
-
     if (saved) {
       const parsed = JSON.parse(saved);
-      return { ...initialData, ...parsed };
+      // Validasi struktur minimal agar chart tidak error
+      if (parsed.customers && parsed.customers.length > 0) {
+        return parsed;
+      }
     }
-    return initialData;
+    return defaultMockData;
   });
 
   useEffect(() => {
@@ -396,21 +448,6 @@ export default function App() {
     setEditingId(null);
     setShowFormPanel(false);
     setCancelConfirmModal(false);
-  };
-
-  const handleTabChange = (tabId) => {
-    setActiveTab(tabId);
-    resetForm();
-    setSearchQuery('');
-    setFilterCrew('');
-    setFilterType('');
-    setFilterDateStart('');
-    setFilterDateEnd('');
-    setFilterPaket('');
-  };
-
-  const confirmDelete = (item, menu) => {
-    setDeleteModal({ show: true, item, menu });
   };
 
   const executeDelete = () => {
@@ -532,6 +569,89 @@ export default function App() {
   };
 
   const financialStats = getFinancialAnalysis();
+
+  const getTrendDataForChart = () => {
+    const dailyMap = {};
+    
+    // Inisiasi dari data pelanggan
+    data.customers.forEach(c => {
+      const date = c.tanggal || new Date().toISOString().split('T')[0];
+      if (!dailyMap[date]) {
+        dailyMap[date] = { date, Pemasukan: 0, Pengeluaran: 0 };
+      }
+      
+      const paket = data.panduan.find(p => p.id === c.paketId);
+      if (paket) {
+        dailyMap[date].Pemasukan += Number(paket.hargaRemap || 0);
+        dailyMap[date].Pengeluaran += Number(paket.benefit || 0);
+      }
+      if (c.tuner) dailyMap[date].Pengeluaran += 250000;
+      if (c.remote) dailyMap[date].Pengeluaran += 150000;
+      
+      const supports = typeof c.support === 'string'
+        ? c.support.split(',').filter(Boolean).length
+        : (Array.isArray(c.support) ? c.support.length : 0);
+      dailyMap[date].Pengeluaran += supports * 50000;
+      dailyMap[date].Pengeluaran += Number(c.perantaraFee || 0);
+    });
+
+    // Inisiasi dari data kas manual
+    data.finance.forEach(f => {
+      const date = f.tanggal || new Date().toISOString().split('T')[0];
+      if (!dailyMap[date]) {
+        dailyMap[date] = { date, Pemasukan: 0, Pengeluaran: 0 };
+      }
+      if (f.tipe === 'Pemasukan') {
+        dailyMap[date].Pemasukan += Number(f.amount || 0);
+      } else if (f.tipe === 'Pengeluaran') {
+        dailyMap[date].Pengeluaran += Number(f.amount || 0);
+      }
+    });
+
+    // Urutkan & petakan menjadi format ramah Recharts
+    return Object.values(dailyMap)
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .slice(-7) // ambil 7 hari transaksi aktif terakhir
+      .map(item => ({
+        ...item,
+        displayDate: formatDateDisplay(item.date),
+        "Pemasukan (Rp)": item.Pemasukan,
+        "Pengeluaran (Rp)": item.Pengeluaran,
+        "Saldo Bersih (Rp)": item.Pemasukan - item.Pengeluaran
+      }));
+  };
+
+  const getPaketDistribution = () => {
+    const map = {};
+    data.customers.forEach(c => {
+      const pId = c.paketId || c.paket_id;
+      const paket = data.panduan.find(p => p.id === pId);
+      const name = paket ? paket.nama : 'Lainnya';
+      map[name] = (map[name] || 0) + 1;
+    });
+
+    return Object.entries(map).map(([name, value]) => ({ name, value }));
+  };
+
+  const getCrewPerformance = () => {
+    const performance = {};
+    data.customers.forEach(c => {
+      if (c.crew) performance[c.crew] = (performance[c.crew] || 0) + 1;
+      if (c.tuner) performance[c.tuner] = (performance[c.tuner] || 0) + 1;
+      if (c.remote) performance[c.remote] = (performance[c.remote] || 0) + 1;
+    });
+
+    return Object.entries(performance)
+      .map(([name, count]) => ({ name, "Total Ganti/Remap": count }))
+      .sort((a, b) => b["Total Ganti/Remap"] - a["Total Ganti/Remap"])
+      .slice(0, 5); // Tampilkan top 5 kru terproduktif
+  };
+
+  const trendData = getTrendDataForChart();
+  const paketData = getPaketDistribution();
+  const crewPerformanceData = getCrewPerformance();
+
+  const PIE_COLORS = ['#f97316', '#10b981', '#6366f1', '#fbbf24', '#06b6d4', '#ec4899'];
 
   const getFilteredItems = () => {
     const list = data[activeTab] || [];
@@ -721,11 +841,45 @@ export default function App() {
     printWindow.document.close();
   };
 
+  const CustomChartTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl shadow-2xl">
+          <p className="text-xs text-slate-400 font-bold mb-1.5">{label}</p>
+          <div className="space-y-1">
+            {payload.map((entry, index) => (
+              <p key={index} className="text-xs font-semibold flex items-center gap-2" style={{ color: entry.color || entry.fill }}>
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: entry.color || entry.fill }}></span>
+                <span>{entry.name}: {formatRupiah(entry.value)}</span>
+              </p>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   const renderDashboardStats = () => {
     const totalCustomers = data.customers.length;
+    const totalCrews = data.crews.length;
+    const totalPanduan = data.panduan.length;
+    const totalFinanceLogs = data.finance.length;
+
+    let totalHargaRemap = 0;
+    data.customers.forEach(c => {
+      const targetId = c.paketId || c.paket_id;
+      const paket = data.panduan.find(p => p.id === targetId);
+      if (paket) {
+        totalHargaRemap += Number(paket.harga_remap || paket.hargaRemap || 0);
+      }
+    });
+
+    const averageRevenue = totalCustomers > 0 ? (totalHargaRemap / totalCustomers) : 0;
     
     return (
       <div className="space-y-6">
+        {/* KPI Utama */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-orange-500/30 transition duration-300">
             <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Pelanggan</p>
@@ -742,14 +896,14 @@ export default function App() {
             </div>
           </div>
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-emerald-500/30 transition duration-300">
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Pemasukan (Kumulatif)</p>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Pemasukan Kumulatif</p>
             <div className="flex items-center justify-between mt-2">
               <h3 className="text-2xl font-extrabold text-emerald-400">{formatRupiah(financialStats.totalPemasukan)}</h3>
               <TrendingUp size={32} className="text-slate-700" />
             </div>
           </div>
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-red-500/30 transition duration-300">
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Pengeluaran (Kumulatif)</p>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Pengeluaran Kumulatif</p>
             <div className="flex items-center justify-between mt-2">
               <h3 className="text-2xl font-extrabold text-red-400">{formatRupiah(financialStats.totalPengeluaran)}</h3>
               <TrendingDown size={32} className="text-slate-700" />
@@ -757,6 +911,164 @@ export default function App() {
           </div>
         </div>
 
+        {/* SECTION: VISUALISASI GRAFIK UTAMA */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* 1. Area Chart: Tren Alur Kas Mingguan */}
+          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl lg:col-span-2 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h4 className="text-sm font-bold uppercase tracking-wide text-slate-300">📈 Tren Alur Kas Mingguan</h4>
+                <p className="text-[10px] text-slate-500 mt-0.5">Analisis harian pemasukan vs pengeluaran bengkel</p>
+              </div>
+              <div className="flex items-center gap-4 text-[10px] font-bold">
+                <span className="flex items-center gap-1 text-emerald-400">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Pemasukan
+                </span>
+                <span className="flex items-center gap-1 text-red-400">
+                  <span className="w-2 h-2 rounded-full bg-rose-500"></span> Pengeluaran
+                </span>
+              </div>
+            </div>
+            
+            <div className="h-64 w-full">
+              {trendData.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-slate-600 text-xs italic">
+                  Belum ada data keuangan untuk membuat grafik.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorPemasukan" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorPengeluaran" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="displayDate" stroke="#475569" fontSize={10} tickLine={false} />
+                    <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
+                    <Tooltip content={<CustomChartTooltip />} />
+                    <Area type="monotone" name="Pemasukan" dataKey="Pemasukan (Rp)" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorPemasukan)" />
+                    <Area type="monotone" name="Pengeluaran" dataKey="Pengeluaran (Rp)" stroke="#f43f5e" strokeWidth={2.5} fillOpacity={1} fill="url(#colorPengeluaran)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+          {/* 2. Donut/Pie Chart: Distribusi Paket Jasa Terlaris */}
+          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between">
+            <div>
+              <h4 className="text-sm font-bold uppercase tracking-wide text-slate-300">🍩 Distribusi Paket Jasa</h4>
+              <p className="text-[10px] text-slate-500 mt-0.5">Segmentasi kontribusi paket terhadap total unit remap</p>
+            </div>
+
+            <div className="h-48 w-full flex items-center justify-center relative">
+              {paketData.length === 0 ? (
+                <span className="text-slate-600 text-xs italic">Belum ada transaksi pelanggan.</span>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={paketData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={70}
+                      paddingAngle={4}
+                      dataKey="value"
+                    >
+                      {paketData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => [`${value} Transaksi`]} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '12px' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+              {paketData.map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between text-[11px] text-slate-400">
+                  <div className="flex items-center gap-1.5 truncate max-w-[150px]">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}></span>
+                    <span className="truncate">{item.name}</span>
+                  </div>
+                  <span className="font-bold text-slate-300">{item.value} Unit</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+        </div>
+
+        {/* ROW 3: Grafik Bar Kru dan Statistik database */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          {/* 3. Bar Chart: Kinerja Kru Bertugas */}
+          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl lg:col-span-2 flex flex-col justify-between">
+            <div>
+              <h4 className="text-sm font-bold uppercase tracking-wide text-slate-300">🔥 Kinerja Kru & Mekanik Teraktif</h4>
+              <p className="text-[10px] text-slate-500 mt-0.5">Top 5 kru berdasarkan jumlah penugasan remap</p>
+            </div>
+
+            <div className="h-56 w-full mt-4">
+              {crewPerformanceData.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-slate-600 text-xs italic">
+                  Belum ada penugasan crew.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={crewPerformanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" stroke="#475569" fontSize={10} tickLine={false} />
+                    <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <Tooltip formatter={(value) => [`${value} Unit`, 'Ganti/Remap']} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '12px' }} />
+                    <Bar dataKey="Total Ganti/Remap" fill="#f97316" radius={[6, 6, 0, 0]}>
+                      {crewPerformanceData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={PIE_COLORS[(index + 1) % PIE_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+          {/* Sektor Statistik Tambahan */}
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4 flex flex-col justify-between">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              <span>📊 Data Pendukung Sistem</span>
+            </h3>
+            <div className="grid grid-cols-2 gap-3 flex-1">
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 hover:border-orange-500/20 transition flex flex-col justify-center">
+                <span className="text-[9px] font-bold text-slate-500 uppercase">Crew Terdaftar</span>
+                <p className="text-xl font-extrabold text-orange-400">{totalCrews} Orang</p>
+              </div>
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 hover:border-indigo-500/20 transition flex flex-col justify-center">
+                <span className="text-[9px] font-bold text-slate-500 uppercase">Paket Jasa</span>
+                <p className="text-xl font-extrabold text-indigo-400">{totalPanduan} Jasa</p>
+              </div>
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 hover:border-emerald-500/20 transition flex flex-col justify-center">
+                <span className="text-[9px] font-bold text-slate-500 uppercase">Log Transaksi</span>
+                <p className="text-xl font-extrabold text-emerald-400">{totalFinanceLogs} Item</p>
+              </div>
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 hover:border-teal-500/20 transition flex flex-col justify-center" title="Rata-rata pemasukan jasa remap per kendaraan">
+                <span className="text-[9px] font-bold text-slate-500 uppercase">Rata Jasa/Unit</span>
+                <p className="text-sm font-extrabold text-teal-400 mt-1 truncate">{formatRupiah(averageRevenue)}</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Aktivitas Terakhir */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
           <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4">Aktivitas Remap Terbaru</h3>
           {data.customers.length === 0 ? (
@@ -1090,7 +1402,9 @@ export default function App() {
             )}
 
             {/* Render Tab List */}
-            {activeTab !== 'dashboard' && (
+            {activeTab === 'dashboard' ? (
+              renderDashboardStats()
+            ) : (
               /* Render Other Tabs with filters and lists */
               <div className="space-y-6">
                 
@@ -1349,7 +1663,7 @@ export default function App() {
               <X size={20} />
             </button>
             <div className="flex items-center text-red-500 mb-4">
-              <AlertTriangle className="mr-2" size={24} />
+              <AlertCircle className="mr-2 text-red-500" size={24} />
               <h3 className="text-lg font-bold">Hapus Data Permanen?</h3>
             </div>
             <p className="text-slate-400 text-sm mb-6 leading-relaxed">
@@ -1370,7 +1684,7 @@ export default function App() {
               <X size={20} />
             </button>
             <div className="flex items-center text-amber-500 mb-4">
-              <AlertCircle className="mr-2" size={24} />
+              <AlertCircle className="mr-2 text-amber-500" size={24} />
               <h3 className="text-lg font-bold">Batalkan Input Data?</h3>
             </div>
             <p className="text-slate-400 text-sm mb-6 leading-relaxed">
