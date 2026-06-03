@@ -446,88 +446,40 @@ export default function App() {
   };
 
   const calculateCrewBenefit = (crewName) => {
-    // 1. Benefit Manual (dari input langsung di menu Keuangan)
-    const manualBenefits = data.finance
-      .filter(f => f.crew === crewName && f.tipe === 'Benefit')
+    // Menghitung benefit crew langsung dari riwayat transaksi keuangan (finance logs)
+    // agar sinkron jika nominal transaksi otomatis telah diedit/diupdate.
+    return data.finance
+      .filter(f => f.crew === crewName && 
+        (
+          (f.tipe === 'Pengeluaran' && f.isAuto === true && !f.keterangan?.toLowerCase().includes('fee perantara')) || 
+          f.tipe === 'Benefit'
+        )
+      )
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-
-    // 2. Benefit Otomatis dari Peran di Menu Customer
-    let autoBenefits = 0;
-    data.customers.forEach(customer => {
-      // Tuner: Rp250.000
-      if (customer.tuner === crewName) autoBenefits += 250000;
-      
-      // Remote: Rp150.000
-      if (customer.remote === crewName) autoBenefits += 150000;
-      
-      // Support: Rp50.000 per kru pembantu
-      const supports = typeof customer.support === 'string'
-        ? customer.support.split(',').map(s => s.trim())
-        : (Array.isArray(customer.support) ? customer.support : []);
-        
-      if (supports.includes(crewName)) autoBenefits += 50000;
-      
-      // Crew Pembawa (Membawa Pelanggan) -> Mengambil nominal benefit dari Panduan Layanan
-      if (customer.crew === crewName) {
-        const targetId = customer.paketId || customer.paket_id;
-        const paket = data.panduan.find(p => p.id === targetId);
-        if (paket) {
-          autoBenefits += Number(paket.benefit || 0);
-        }
-      }
-    });
-
-    return manualBenefits + autoBenefits;
   };
 
   const getFinancialAnalysis = () => {
-    // 1. Ambil Pemasukan Manual (Diluar Pemasukan Otomatis untuk cegah Duplikasi data)
-    const manualPemasukan = data.finance
-      .filter(f => f.tipe === 'Pemasukan' && !f.customer_ref_id && !f.isAuto)
+    // 1. Total Pemasukan: diambil langsung dari total 'Pemasukan' di ledger finance logs
+    const totalPemasukan = data.finance
+      .filter(f => f.tipe === 'Pemasukan')
       .reduce((sum, f) => sum + Number(f.amount || 0), 0);
 
-    // 2. Ambil Pengeluaran Manual (Abaikan komisi otomatis)
-    const manualPengeluaran = data.finance
-      .filter(f => f.tipe === 'Pengeluaran' && !f.customer_ref_id && !f.isAuto)
+    // 2. Total Pengeluaran: diambil langsung dari total 'Pengeluaran' di ledger finance logs
+    const totalPengeluaran = data.finance
+      .filter(f => f.tipe === 'Pengeluaran')
       .reduce((sum, f) => sum + Number(f.amount || 0), 0);
 
-    let totalHargaRemap = 0;
-    let totalBenefitCrewPembawa = 0;
-    let totalBenefitTuner = 0;
-    let totalBenefitRemote = 0;
-    let totalBenefitSupport = 0;
-    let totalPerantaraFee = 0;
+    // 3. Total Benefit Crew: total pengeluaran otomatis yang merupakan benefit (isAuto === true dan bukan Fee Perantara)
+    const totalBenefit = data.finance
+      .filter(f => f.tipe === 'Pengeluaran' && f.isAuto === true && !f.keterangan?.toLowerCase().includes('fee perantara'))
+      .reduce((sum, f) => sum + Number(f.amount || 0), 0);
 
-    data.customers.forEach(c => {
-      const targetId = c.paketId || c.paket_id;
-      const paket = data.panduan.find(p => p.id === targetId);
-      if (paket) {
-        totalHargaRemap += Number(paket.harga_remap || paket.hargaRemap || 0);
-        totalBenefitCrewPembawa += Number(paket.benefit || 0);
-      }
-      if (c.tuner) totalBenefitTuner += 250000;
-      if (c.remote) totalBenefitRemote += 150000;
-      
-      const supports = typeof c.support === 'string'
-        ? c.support.split(',').filter(Boolean).length
-        : (Array.isArray(c.support) ? c.support.length : 0);
-        
-      totalBenefitSupport += totalBenefitSupport + (supports * 50000); // Fixed auto logic slightly
-      totalPerantaraFee += Number(c.perantaraFee || c.perantara_fee || 0);
-    });
-
-    const totalBenefitAuto = totalBenefitCrewPembawa + totalBenefitTuner + totalBenefitRemote + totalBenefitSupport;
-    const totalPengeluaranOtomatis = totalBenefitAuto + totalPerantaraFee;
-
-    const totalPemasukanKumulatif = manualPemasukan + totalHargaRemap;
-    const totalPengeluaranKumulatif = manualPengeluaran + totalPengeluaranOtomatis;
-
-    const totalSaldoBersih = totalPemasukanKumulatif - totalPengeluaranKumulatif;
+    const totalSaldoBersih = totalPemasukan - totalPengeluaran;
 
     return {
-      totalPemasukan: totalPemasukanKumulatif,
-      totalPengeluaran: totalPengeluaranKumulatif,
-      totalBenefit: totalBenefitAuto,
+      totalPemasukan,
+      totalPengeluaran,
+      totalBenefit,
       totalSaldoBersih
     };
   };
@@ -728,38 +680,37 @@ export default function App() {
     const totalPanduan = data.panduan.length;
     const totalFinanceLogs = data.finance.length;
 
-    // Menghitung detail pendukung alur kas
-    let totalHargaRemap = 0;
-    let totalBenefitCrewPembawa = 0;
-    let totalBenefitTuner = 0;
-    let totalBenefitRemote = 0;
-    let totalBenefitSupport = 0;
-    let totalPerantaraFee = 0;
-
-    data.customers.forEach(c => {
-      const targetId = c.paketId || c.paket_id;
-      const paket = data.panduan.find(p => p.id === targetId);
-      if (paket) {
-        totalHargaRemap += Number(paket.harga_remap || paket.hargaRemap || 0);
-        totalBenefitCrewPembawa += Number(paket.benefit || 0);
-      }
-      if (c.tuner) totalBenefitTuner += 250000;
-      if (c.remote) totalBenefitRemote += 150000;
-      
-      const supports = typeof c.support === 'string'
-        ? c.support.split(',').filter(Boolean).length
-        : (Array.isArray(c.support) ? c.support.length : 0);
-        
-      totalBenefitSupport += supports * 50000;
-      totalPerantaraFee += Number(c.perantaraFee || c.perantara_fee || 0);
-    });
+    // Perhitungan detail pendukung kas langsung dari ledger data.finance agar sinkron setelah diedit
+    const totalHargaRemap = data.finance
+      .filter(f => f.tipe === 'Pemasukan' && f.isAuto === true)
+      .reduce((sum, f) => sum + Number(f.amount || 0), 0);
 
     const manualPemasukan = data.finance
-      .filter(f => f.tipe === 'Pemasukan' && !f.customer_ref_id && !f.isAuto)
+      .filter(f => f.tipe === 'Pemasukan' && f.isAuto !== true)
+      .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+
+    const totalBenefitCrewPembawa = data.finance
+      .filter(f => f.tipe === 'Pengeluaran' && f.isAuto === true && f.keterangan?.toLowerCase().includes('crew pembawa'))
+      .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+
+    const totalBenefitTuner = data.finance
+      .filter(f => f.tipe === 'Pengeluaran' && f.isAuto === true && f.keterangan?.toLowerCase().includes('tuner'))
+      .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+
+    const totalBenefitRemote = data.finance
+      .filter(f => f.tipe === 'Pengeluaran' && f.isAuto === true && f.keterangan?.toLowerCase().includes('remote'))
+      .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+
+    const totalBenefitSupport = data.finance
+      .filter(f => f.tipe === 'Pengeluaran' && f.isAuto === true && f.keterangan?.toLowerCase().includes('support'))
+      .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+
+    const totalPerantaraFee = data.finance
+      .filter(f => f.tipe === 'Pengeluaran' && f.isAuto === true && f.keterangan?.toLowerCase().includes('perantara'))
       .reduce((sum, f) => sum + Number(f.amount || 0), 0);
 
     const manualPengeluaran = data.finance
-      .filter(f => f.tipe === 'Pengeluaran' && !f.customer_ref_id && !f.isAuto)
+      .filter(f => f.tipe === 'Pengeluaran' && f.isAuto !== true)
       .reduce((sum, f) => sum + Number(f.amount || 0), 0);
 
     const averageRevenue = totalCustomers > 0 ? (totalHargaRemap / totalCustomers) : 0;
