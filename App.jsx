@@ -11,7 +11,7 @@ import {
   Search, 
   X, 
   AlertCircle,
-  AlertTriangle, // Ditambahkan agar modal hapus tidak error
+  AlertTriangle,
   Settings, 
   TrendingUp, 
   TrendingDown, 
@@ -20,9 +20,22 @@ import {
   Printer,
   Calendar,
   Filter,
-  Info
+  Info,
+  Database,
+  CheckCircle,
+  Copy,
+  Terminal
 } from 'lucide-react';
 
+// Memuat Supabase Client secara dinamis dari window (CDN global) untuk menghindari error kompilasi bundler
+const getSupabaseClient = (url, key) => {
+  if (typeof window !== 'undefined' && window.supabase) {
+    return window.supabase.createClient(url, key);
+  }
+  return null;
+};
+
+// --- ATURAN STANDARD DATE PICKER ---
 function DatePicker({ value, onChange, placeholder = "Pilih Tanggal" }) {
   const [isOpen, setIsOpen] = useState(false);
   const [viewDate, setViewDate] = useState(() => value ? new Date(value) : new Date());
@@ -253,12 +266,43 @@ const generateAutoFinanceLogs = (customer, panduanList) => {
   return logs;
 };
 
+// --- DATA TRANSFORMERS (CAMELCASE TO SNAKE_CASE & VICE VERSA) ---
+const toCamelCase = (obj) => {
+  if (!obj) return null;
+  const newObj = {};
+  for (const key in obj) {
+    const camelKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+    newObj[camelKey] = obj[key];
+  }
+  return newObj;
+};
+
+const toSnakeCase = (obj) => {
+  if (!obj) return null;
+  const newObj = {};
+  for (const key in obj) {
+    const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+    newObj[snakeKey] = obj[key];
+  }
+  return newObj;
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showFormPanel, setShowFormPanel] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [deleteModal, setDeleteModal] = useState({ show: false, item: null, menu: '' });
   const [cancelConfirmModal, setCancelConfirmModal] = useState(false);
+  
+  // Custom Toast Notification System
+  const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+
+  // Supabase Configuration States
+  const [supabaseUrl, setSupabaseUrl] = useState(() => localStorage.getItem('tk_supabase_url') || '');
+  const [supabaseKey, setSupabaseKey] = useState(() => localStorage.getItem('tk_supabase_key') || '');
+  const [dbStatus, setDbStatus] = useState('offline'); // 'offline', 'connected', 'error'
+  const [supabaseClient, setSupabaseClient] = useState(null);
+  const [loadingDb, setLoadingDb] = useState(false);
 
   // Global search & filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -266,11 +310,10 @@ export default function App() {
   const [filterType, setFilterType] = useState('');
   const [filterDateStart, setFilterDateStart] = useState('');
   const [filterDateEnd, setFilterDateEnd] = useState('');
-  const [filterPaket, setFilterPaket] = useState('');
 
-  // Initial Data dari LocalStorage
+  // Initial Data dari LocalStorage (Fallback utama offline)
   const [data, setData] = useState(() => {
-    const saved = localStorage.getItem('tuningkhan_pro');
+    const saved = localStorage.getItem('tuningkhan_pro_v3');
     const initialData = {
       customers: [],
       crews: [],
@@ -285,9 +328,107 @@ export default function App() {
     return initialData;
   });
 
+  // Simpan data offline ke localStorage jika terjadi fallback
   useEffect(() => {
-    localStorage.setItem('tuningkhan_pro', JSON.stringify(data));
+    localStorage.setItem('tuningkhan_pro_v3', JSON.stringify(data));
   }, [data]);
+
+  // Memuat CDN Supabase ke DOM secara dinamis jika belum ada
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !window.supabase) {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+      script.async = true;
+      script.onload = () => {
+        // Trigger re-evaluasi koneksi setelah script terpasang
+        if (supabaseUrl && supabaseKey) {
+          initializeSupabase();
+        }
+      };
+      document.head.appendChild(script);
+    }
+  }, []);
+
+  const initializeSupabase = async () => {
+    if (supabaseUrl && supabaseKey) {
+      try {
+        setLoadingDb(true);
+        const client = getSupabaseClient(supabaseUrl, supabaseKey);
+        
+        if (!client) {
+          // Tunggu sebentar jika library CDN belum sepenuhnya siap di window object
+          setTimeout(initializeSupabase, 500);
+          return;
+        }
+
+        setSupabaseClient(client);
+        
+        // Tes koneksi dengan query sederhana ke salah satu tabel
+        const { error } = await client.from('crews').select('count', { count: 'exact', head: true });
+        
+        if (error) {
+          setDbStatus('error');
+          showToast("Koneksi Supabase error. Silakan cek skema tabel Anda.", "error");
+        } else {
+          setDbStatus('connected');
+          showToast("Supabase Database Berhasil Terkoneksi!", "success");
+          // Sync data dari cloud ke local memory state
+          fetchAllFromSupabase(client);
+        }
+      } catch (err) {
+        setDbStatus('error');
+        showToast("Konfigurasi kredensial Supabase salah atau bermasalah.", "error");
+      } finally {
+        setLoadingDb(false);
+      }
+    } else {
+      setDbStatus('offline');
+      setSupabaseClient(null);
+    }
+  };
+
+  // Trigger inisialisasi Supabase Client jika kredensial diubah
+  useEffect(() => {
+    initializeSupabase();
+  }, [supabaseUrl, supabaseKey]);
+
+  // Ambil seluruh data dari Supabase cloud
+  const fetchAllFromSupabase = async (clientInstance = supabaseClient) => {
+    if (!clientInstance) return;
+    try {
+      setLoadingDb(true);
+      const [resCrews, resPanduan, resCustomers, resFinance] = await Promise.all([
+        clientInstance.from('crews').select('*'),
+        clientInstance.from('panduan').select('*'),
+        clientInstance.from('customers').select('*'),
+        clientInstance.from('finance').select('*')
+      ]);
+
+      if (resCrews.error) throw resCrews.error;
+      if (resPanduan.error) throw resPanduan.error;
+      if (resCustomers.error) throw resCustomers.error;
+      if (resFinance.error) throw resFinance.error;
+
+      setData({
+        crews: (resCrews.data || []).map(toCamelCase),
+        panduan: (resPanduan.data || []).map(toCamelCase),
+        customers: (resCustomers.data || []).map(toCamelCase),
+        finance: (resFinance.data || []).map(toCamelCase)
+      });
+    } catch (err) {
+      console.error("Error fetching Supabase data:", err);
+      showToast("Gagal mengambil data dari Supabase cloud.", "error");
+    } finally {
+      setLoadingDb(false);
+    }
+  };
+
+  const showToast = (message, type = 'success') => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => {
+      setNotification({ show: false, message: '', type: 'success' });
+    }, 4000);
+  };
 
   const [formData, setFormData] = useState({});
 
@@ -333,27 +474,86 @@ export default function App() {
     setFormData(newFormData);
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    const saveItem = { ...formData, id: editingId || Date.now().toString() };
+    const itemId = editingId || Date.now().toString();
+    const saveItem = { ...formData, id: itemId };
     
+    // Konversi array support menjadi string dipisahkan koma untuk kompatibilitas database
+    if (activeTab === 'customers' && Array.isArray(saveItem.support)) {
+      saveItem.support = saveItem.support.join(', ');
+    }
+
+    // --- ALUR SIMPAN CLOUD (SUPABASE) ---
+    if (dbStatus === 'connected' && supabaseClient) {
+      try {
+        setLoadingDb(true);
+        if (activeTab === 'customers') {
+          // 1. Upsert data Customer ke database
+          const dbCustomer = toSnakeCase(saveItem);
+          const { error: custError } = await supabaseClient
+            .from('customers')
+            .upsert(dbCustomer);
+          if (custError) throw custError;
+
+          // 2. Hapus log keuangan otomatis yang lama terkait id pelanggan ini
+          const { error: delError } = await supabaseClient
+            .from('finance')
+            .delete()
+            .eq('is_auto', true)
+            .like('id', `${saveItem.id}%`);
+          if (delError) throw delError;
+
+          // 3. Buat ulang log otomatis baru
+          const newAutoLogs = generateAutoFinanceLogs(saveItem, data.panduan);
+          if (newAutoLogs.length > 0) {
+            const dbFinanceLogs = newAutoLogs.map(toSnakeCase);
+            const { error: finError } = await supabaseClient
+              .from('finance')
+              .insert(dbFinanceLogs);
+            if (finError) throw finError;
+          }
+        } else {
+          // General saving untuk crews, panduan, dan manual finance
+          const dbItem = toSnakeCase(saveItem);
+          const { error: itemError } = await supabaseClient
+            .from(activeTab)
+            .upsert(dbItem);
+          if (itemError) throw itemError;
+        }
+
+        showToast("Data Berhasil Disimpan ke Cloud Supabase!", "success");
+        // Tarik data terbaru untuk memastikan sinkronisasi sempurna
+        await fetchAllFromSupabase();
+      } catch (err) {
+        console.error("Supabase Save Error:", err);
+        showToast("Gagal menyimpan ke cloud. Menggunakan offline mode.", "error");
+        handleLocalFallbackSave(saveItem);
+      } finally {
+        setLoadingDb(false);
+      }
+    } else {
+      // --- ALUR SIMPAN LOKAL (OFFLINE FALLBACK) ---
+      handleLocalFallbackSave(saveItem);
+    }
+    
+    setFormData({});
+    setEditingId(null);
+    setShowFormPanel(false);
+  };
+
+  const handleLocalFallbackSave = (saveItem) => {
     setData(prev => {
       let updatedCustomers = prev.customers;
       let updatedFinance = prev.finance;
       
       if (activeTab === 'customers') {
-        // 1. Simpan atau perbarui list pelanggan
         updatedCustomers = editingId 
           ? prev.customers.map(item => item.id === editingId ? saveItem : item)
           : [...prev.customers, saveItem];
           
-        // 2. Hapus log keuangan otomatis yang lama untuk pelanggan ini (jika sedang mengedit)
         updatedFinance = prev.finance.filter(f => !(f.isAuto && f.id.startsWith(saveItem.id)));
-        
-        // 3. Buat ulang log keuangan otomatis yang baru
         const newAutoLogs = generateAutoFinanceLogs(saveItem, prev.panduan);
-        
-        // 4. Masukkan log otomatis ke data keuangan
         updatedFinance = [...updatedFinance, ...newAutoLogs];
         
         return {
@@ -362,7 +562,6 @@ export default function App() {
           finance: updatedFinance
         };
       } else {
-        // Logika default untuk tab selain pelanggan (crew, panduan, manual finance)
         return {
           ...prev,
           [activeTab]: editingId 
@@ -371,10 +570,7 @@ export default function App() {
         };
       }
     });
-    
-    setFormData({});
-    setEditingId(null);
-    setShowFormPanel(false);
+    showToast("Data Tersimpan ke Database Lokal (Offline)", "success");
   };
 
   const handleEdit = (item) => {
@@ -407,69 +603,88 @@ export default function App() {
     setFilterType('');
     setFilterDateStart('');
     setFilterDateEnd('');
-    setFilterPaket('');
   };
 
-  const confirmDelete = (item, menu) => {
-    setDeleteModal({ show: true, item, menu });
-  };
-
-  const executeDelete = () => {
+  const executeDelete = async () => {
     const { item, menu } = deleteModal;
     
+    // --- HAPUS DARI SUPABASE CLOUD ---
+    if (dbStatus === 'connected' && supabaseClient) {
+      try {
+        setLoadingDb(true);
+        if (menu === 'customers') {
+          // Hapus log finance otomatis yang mengikat
+          await supabaseClient.from('finance').delete().eq('is_auto', true).like('id', `${item.id}%`);
+          // Hapus customer
+          const { error } = await supabaseClient.from('customers').delete().eq('id', item.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabaseClient.from(menu).delete().eq('id', item.id);
+          if (error) throw error;
+        }
+        
+        showToast("Data Terhapus Permanen dari Cloud Supabase!", "success");
+        await fetchAllFromSupabase();
+      } catch (err) {
+        console.error("Error deleting from Supabase:", err);
+        showToast("Koneksi cloud terputus. Melakukan hapus lokal.", "error");
+        handleLocalFallbackDelete(item, menu);
+      } finally {
+        setLoadingDb(false);
+      }
+    } else {
+      // --- HAPUS DARI LOCALSTORAGE ---
+      handleLocalFallbackDelete(item, menu);
+    }
+    
+    setDeleteModal({ show: false, item: null, menu: '' });
+  };
+
+  const handleLocalFallbackDelete = (item, menu) => {
     setData(prev => {
       if (menu === 'customers') {
-        // 1. Hapus data pelanggan dari list
         const updatedCustomers = prev.customers.filter(i => i.id !== item.id);
-        // 2. Bersihkan seluruh log keuangan otomatis yang terkait dengan pelanggan ini
         const updatedFinance = prev.finance.filter(f => !(f.isAuto && f.id.startsWith(item.id)));
-        
         return {
           ...prev,
           customers: updatedCustomers,
           finance: updatedFinance
         };
       } else {
-        // Hapus biasa untuk menu lain
         return {
           ...prev,
           [menu]: prev[menu].filter(i => i.id !== item.id)
         };
       }
     });
-    
-    setDeleteModal({ show: false, item: null, menu: '' });
+    showToast("Data Terhapus dari Penyimpanan Lokal", "success");
   };
 
   const formatRupiah = (number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(number);
   };
 
+  // Perhitungan Benefit crew langsung dari riwayat transaksi keuangan (finance logs)
   const calculateCrewBenefit = (crewName) => {
-    // Menghitung benefit crew langsung dari riwayat transaksi keuangan (finance logs)
-    // agar sinkron jika nominal transaksi otomatis telah diedit/diupdate.
     return data.finance
       .filter(f => f.crew === crewName && 
         (
           (f.tipe === 'Pengeluaran' && f.isAuto === true && !f.keterangan?.toLowerCase().includes('fee perantara')) || 
-          f.tipe === 'Benefit'
+          f.tipe === 'Benefit' || f.tipe === 'Pengeluaran'
         )
       )
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
   };
 
   const getFinancialAnalysis = () => {
-    // 1. Total Pemasukan: diambil langsung dari total 'Pemasukan' di ledger finance logs
     const totalPemasukan = data.finance
       .filter(f => f.tipe === 'Pemasukan')
       .reduce((sum, f) => sum + Number(f.amount || 0), 0);
 
-    // 2. Total Pengeluaran: diambil langsung dari total 'Pengeluaran' di ledger finance logs
     const totalPengeluaran = data.finance
       .filter(f => f.tipe === 'Pengeluaran')
       .reduce((sum, f) => sum + Number(f.amount || 0), 0);
 
-    // 3. Total Benefit Crew: total pengeluaran otomatis yang merupakan benefit (isAuto === true dan bukan Fee Perantara)
     const totalBenefit = data.finance
       .filter(f => f.tipe === 'Pengeluaran' && f.isAuto === true && !f.keterangan?.toLowerCase().includes('fee perantara'))
       .reduce((sum, f) => sum + Number(f.amount || 0), 0);
@@ -543,6 +758,23 @@ export default function App() {
 
   const filteredItems = getFilteredItems();
 
+  const saveSupabaseCredentials = (url, key) => {
+    localStorage.setItem('tk_supabase_url', url);
+    localStorage.setItem('tk_supabase_key', key);
+    setSupabaseUrl(url);
+    setSupabaseKey(key);
+  };
+
+  const clearSupabaseCredentials = () => {
+    localStorage.removeItem('tk_supabase_url');
+    localStorage.removeItem('tk_supabase_key');
+    setSupabaseUrl('');
+    setSupabaseKey('');
+    setDbStatus('offline');
+    setSupabaseClient(null);
+    showToast("Koneksi Supabase Diputus. Berubah Ke Mode Offline Lokal.", "info");
+  };
+
   const exportToCSV = (tabName, items) => {
     let headers = [];
     let rows = [];
@@ -550,8 +782,7 @@ export default function App() {
     if (tabName === 'customers') {
       headers = ['Tanggal', 'Nama Pelanggan', 'No. Plat', 'Tipe Mobil', 'Warna', 'VIN', 'Paket Remap', 'Crew Pembawa', 'Tuner', 'Remote', 'Support', 'Nama Perantara', 'Fee Perantara'];
       rows = items.map(item => {
-        const targetId = item.paketId || item.paket_id;
-        const p = data.panduan.find(x => x.id === targetId);
+        const p = data.panduan.find(x => x.id === item.paketId);
         return [
           item.tanggal || '',
           item.nama || '',
@@ -565,7 +796,7 @@ export default function App() {
           item.remote || '',
           item.support || '',
           item.perantara || '',
-          item.perantaraFee || item.perantara_fee || 0
+          item.perantaraFee || 0
         ];
       });
     } else if (tabName === 'crews') {
@@ -576,7 +807,7 @@ export default function App() {
       rows = items.map(item => [item.tanggal || '', item.tipe || '', item.plat || '-', item.crew || '-', item.keterangan || '', item.amount || 0]);
     } else if (tabName === 'panduan') {
       headers = ['Nama Paket', 'Harga Remap', 'Benefit'];
-      rows = items.map(item => [item.nama || '', item.hargaRemap || item.harga_remap || 0, item.benefit || 0]);
+      rows = items.map(item => [item.nama || '', item.hargaRemap || 0, item.benefit || 0]);
     }
     
     const csvContent = "\uFEFF" + [
@@ -604,8 +835,7 @@ export default function App() {
     if (tabName === 'customers') {
       tableHeadersHTML = '<tr><th>Tanggal</th><th>Nama</th><th>No. Plat</th><th>Mobil</th><th>Warna</th><th>VIN</th><th>Paket</th><th>Crew Pembawa</th><th>Tuner</th><th>Remote</th><th>Support</th><th>Perantara</th></tr>';
       tableRowsHTML = items.map(item => {
-        const targetId = item.paketId || item.paket_id;
-        const p = data.panduan.find(x => x.id === targetId);
+        const p = data.panduan.find(x => x.id === item.paketId);
         return `<tr>
           <td>${formatDateDisplay(item.tanggal)}</td>
           <td><b>${item.nama}</b></td>
@@ -642,7 +872,7 @@ export default function App() {
       tableHeadersHTML = '<tr><th>Nama Paket</th><th>Harga Remap</th><th>Benefit</th></tr>';
       tableRowsHTML = items.map(item => `<tr>
         <td><b>${item.nama}</b></td>
-        <td>${formatRupiah(item.hargaRemap || item.harga_remap)}</td>
+        <td>${formatRupiah(item.hargaRemap)}</td>
         <td>${formatRupiah(item.benefit)}</td>
       </tr>`).join('');
     }
@@ -680,7 +910,7 @@ export default function App() {
     const totalPanduan = data.panduan.length;
     const totalFinanceLogs = data.finance.length;
 
-    // Perhitungan detail pendukung kas langsung dari ledger data.finance agar sinkron setelah diedit
+    // Perhitungan detail pendukung kas langsung dari ledger data.finance agar sinkron setelah ditarik / diedit
     const totalHargaRemap = data.finance
       .filter(f => f.tipe === 'Pemasukan' && f.isAuto === true)
       .reduce((sum, f) => sum + Number(f.amount || 0), 0);
@@ -734,14 +964,14 @@ export default function App() {
             </div>
           </div>
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-emerald-500/30 transition duration-300">
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Pemasukan (Kumulatif)</p>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Pemasukan</p>
             <div className="flex items-center justify-between mt-2">
               <h3 className="text-2xl font-extrabold text-emerald-400">{formatRupiah(financialStats.totalPemasukan)}</h3>
               <TrendingUp size={32} className="text-slate-700" />
             </div>
           </div>
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-red-500/30 transition duration-300">
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Pengeluaran (Kumulatif)</p>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Pengeluaran</p>
             <div className="flex items-center justify-between mt-2">
               <h3 className="text-2xl font-extrabold text-red-400">{formatRupiah(financialStats.totalPengeluaran)}</h3>
               <TrendingDown size={32} className="text-slate-700" />
@@ -884,6 +1114,22 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 flex font-sans text-slate-200">
       
+      {/* Toast Notification Alert Banner */}
+      {notification.show && (
+        <div className="fixed top-5 right-5 z-[9999] animate-bounce flex items-center p-4 rounded-xl shadow-2xl border bg-slate-900 text-slate-100 border-slate-800">
+          <div className="mr-3">
+            {notification.type === 'success' ? (
+              <CheckCircle className="text-emerald-500" size={20} />
+            ) : notification.type === 'error' ? (
+              <AlertTriangle className="text-red-500" size={20} />
+            ) : (
+              <Info className="text-cyan-500" size={20} />
+            )}
+          </div>
+          <span className="text-xs font-bold">{notification.message}</span>
+        </div>
+      )}
+
       {/* Sidebar Nav */}
       <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between">
         <div>
@@ -916,6 +1162,18 @@ export default function App() {
                 <item.icon size={18} className="mr-3" /> {item.name}
               </button>
             ))}
+
+            {/* Menu Khusus Setelan Database Supabase */}
+            <button 
+              onClick={() => { handleTabChange('db_settings') }}
+              className={`w-full flex items-center px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all ${
+                activeTab === 'db_settings' 
+                ? 'bg-orange-600/10 text-orange-500 border border-orange-500/20' 
+                : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+              }`}
+            >
+              <Database size={18} className="mr-3" /> Set Database Cloud
+            </button>
           </nav>
         </div>
 
@@ -927,9 +1185,14 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-slate-900 border-b border-slate-800 h-16 flex items-center justify-between px-8 shadow-md">
-          <div className="flex items-center space-x-2">
-            <span className="h-2 w-2 rounded-full animate-pulse bg-orange-500"></span>
-            <h2 className="text-lg font-bold text-slate-200 uppercase tracking-wider">{activeTab} Panel</h2>
+          <div className="flex items-center space-x-3">
+            <span className={`h-2.5 w-2.5 rounded-full animate-pulse ${
+              dbStatus === 'connected' ? 'bg-emerald-500' : dbStatus === 'error' ? 'bg-red-500' : 'bg-amber-500'
+            }`}></span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              {dbStatus === 'connected' ? 'Supabase Connected' : dbStatus === 'error' ? 'Supabase Error' : 'Offline Mode (Local)'}
+            </span>
+            {loadingDb && <span className="text-xs text-orange-400 animate-pulse">Syncing...</span>}
           </div>
           
           <div className="flex items-center space-x-6">
@@ -947,9 +1210,143 @@ export default function App() {
         <div className="flex-1 overflow-auto p-8">
           <div className="max-w-6xl mx-auto space-y-8">
             
-            {activeTab === 'dashboard' ? (
+            {activeTab === 'dashboard' && (
               renderDashboardStats()
-            ) : (
+            )}
+
+            {/* TAB SETELAN SUPABASE DATABASE */}
+            {activeTab === 'db_settings' && (
+              <div className="space-y-6">
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                  <h3 className="text-lg font-bold text-slate-100 mb-2 flex items-center gap-2">
+                    <Database className="text-orange-500" size={22} />
+                    Integrasi Supabase Cloud Database (Free Tier)
+                  </h3>
+                  <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+                    TuningKhan Pro telah dilengkapi integrasi native ke Supabase. Masukkan URL proyek dan kunci API Anon untuk mengaktifkan sinkronisasi cloud waktu-nyata (*real-time*) di antara semua perangkat crew Anda.
+                  </p>
+
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    const url = e.target.elements.urlInput.value;
+                    const key = e.target.elements.keyInput.value;
+                    saveSupabaseCredentials(url, key);
+                  }} className="space-y-4 max-w-xl">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Supabase Project URL</label>
+                      <input 
+                        type="url" 
+                        name="urlInput" 
+                        defaultValue={supabaseUrl} 
+                        placeholder="https://your-project-id.supabase.co" 
+                        required 
+                        className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Supabase Anon API Key (Kunci Anon Publik)</label>
+                      <input 
+                        type="password" 
+                        name="keyInput" 
+                        defaultValue={supabaseKey} 
+                        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." 
+                        required 
+                        className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none font-mono text-sm" 
+                      />
+                    </div>
+
+                    <div className="flex gap-3 pt-4">
+                      <button type="submit" className="px-5 py-2.5 bg-orange-600 text-slate-950 font-bold rounded-xl hover:bg-orange-500 transition shadow-md">
+                        Simpan & Hubungkan Database
+                      </button>
+                      {(supabaseUrl || supabaseKey) && (
+                        <button type="button" onClick={clearSupabaseCredentials} className="px-4 py-2.5 bg-slate-800 text-red-400 border border-slate-700 font-bold rounded-xl hover:bg-red-500/10 hover:text-red-300 transition">
+                          Putus Koneksi
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                </div>
+
+                {/* SQL MANUAL SETUP INSTRUCTION */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                  <h4 className="text-sm font-bold text-slate-300 flex items-center gap-2 mb-4">
+                    <Terminal size={18} className="text-orange-500" />
+                    Panduan Membuat Tabel di Supabase (SQL Editor)
+                  </h4>
+                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+                    Salin (*copy*) script SQL di bawah ini dan jalankan pada menu **SQL Editor** di panel dasbor Supabase Anda agar tabel-tabel dapat terbentuk secara instan dan sinkron:
+                  </p>
+                  <div className="relative group">
+                    <pre className="bg-slate-950 text-slate-300 p-4 rounded-xl font-mono text-xs overflow-x-auto max-h-80 border border-slate-850">
+{`-- 1. Tabel Crews
+CREATE TABLE crews (
+    id TEXT PRIMARY KEY,
+    nama TEXT NOT NULL,
+    posisi TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 2. Tabel Panduan Layanan Jasa
+CREATE TABLE panduan (
+    id TEXT PRIMARY KEY,
+    nama TEXT NOT NULL,
+    harga_remap NUMERIC NOT NULL DEFAULT 0,
+    benefit NUMERIC NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 3. Tabel Pelanggan (Customers)
+CREATE TABLE customers (
+    id TEXT PRIMARY KEY,
+    tanggal DATE NOT NULL,
+    nama TEXT NOT NULL,
+    plat TEXT NOT NULL,
+    mobil TEXT NOT NULL,
+    warna TEXT,
+    vin TEXT,
+    phone TEXT,
+    location TEXT,
+    paket_id TEXT REFERENCES panduan(id),
+    crew TEXT,
+    tuner TEXT,
+    remote TEXT,
+    perantara TEXT,
+    perantara_fee NUMERIC DEFAULT 0,
+    support TEXT,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 4. Tabel Log Keuangan (Finance)
+CREATE TABLE finance (
+    id TEXT PRIMARY KEY,
+    tanggal DATE NOT NULL,
+    tipe TEXT NOT NULL CHECK (tipe IN ('Pemasukan', 'Pengeluaran', 'Benefit')),
+    plat TEXT,
+    crew TEXT,
+    keterangan TEXT NOT NULL,
+    amount NUMERIC NOT NULL DEFAULT 0,
+    is_auto BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT now()
+);`}
+                    </pre>
+                    <button 
+                      onClick={() => {
+                        const codeText = document.querySelector('pre').innerText;
+                        navigator.clipboard.writeText(codeText);
+                        showToast("Script SQL Berhasil Disalin!", "success");
+                      }}
+                      className="absolute right-3 top-3 bg-slate-900/90 text-slate-400 hover:text-slate-100 p-2 rounded-lg border border-slate-800 transition"
+                      title="Salin Kode SQL"
+                    >
+                      <Copy size={16} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab !== 'dashboard' && activeTab !== 'db_settings' && (
               <>
                 {!showFormPanel && (
                   <div className="flex justify-between items-center bg-slate-900 p-4 border border-slate-800 rounded-xl">
@@ -1032,7 +1429,7 @@ export default function App() {
                             <select name="paketId" value={formData.paketId || formData.paket_id || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
                               <option value="">-- Pilih Paket Panduan --</option>
                               {data.panduan.map(p => (
-                                <option key={p.id} value={p.id}>{p.nama} (Remap: {formatRupiah(p.hargaRemap || p.harga_remap || 0)})</option>
+                                <option key={p.id} value={p.id}>{p.nama} (Remap: {formatRupiah(p.hargaRemap)})</option>
                               ))}
                             </select>
                           </div>
@@ -1357,7 +1754,7 @@ export default function App() {
                                     <td className="p-4 font-mono text-xs text-slate-400">{item.vin || '-'}</td>
                                     <td className="p-4 text-slate-300 text-sm">
                                       {(() => {
-                                        const p = data.panduan.find(x => x.id === (item.paketId || item.paket_id));
+                                        const p = data.panduan.find(x => x.id === item.paketId);
                                         return p ? p.nama : '-';
                                       })()}
                                     </td>
@@ -1366,7 +1763,7 @@ export default function App() {
                                     <td className="p-4 text-cyan-400 font-medium">{item.remote || '-'}</td>
                                     <td className="p-4 text-indigo-400 text-sm max-w-[150px] truncate" title={item.support || '-'}>{item.support || '-'}</td>
                                     <td className="p-4 text-slate-400 text-sm">{item.perantara || '-'}</td>
-                                    <td className="p-4 text-slate-400 text-sm">{formatRupiah(item.perantaraFee || item.perantara_fee || 0)}</td>
+                                    <td className="p-4 text-slate-400 text-sm">{formatRupiah(item.perantaraFee || 0)}</td>
                                   </>
                                 )}
                                 {activeTab === 'crews' && (
@@ -1397,7 +1794,7 @@ export default function App() {
                                 {activeTab === 'panduan' && (
                                   <>
                                     <td className="p-4 font-bold text-slate-200">{item.nama}</td>
-                                    <td className="p-4 text-orange-400 font-bold">{formatRupiah(item.hargaRemap || item.harga_remap)}</td>
+                                    <td className="p-4 text-orange-400 font-bold">{formatRupiah(item.hargaRemap)}</td>
                                     <td className="p-4 text-emerald-400 font-bold">{formatRupiah(item.benefit)}</td>
                                   </>
                                 )}
@@ -1441,7 +1838,7 @@ export default function App() {
               <h3 className="text-lg font-bold">Hapus Data Permanen?</h3>
             </div>
             <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-              Tindakan ini tidak dapat dibatalkan. Menghapus item ini akan melenyapkan data terkait dari database cloud secara permanen.
+              Tindakan ini tidak dapat dibatalkan. Menghapus item ini akan melenyapkan data terkait secara permanen.
             </p>
             <div className="flex justify-end gap-3">
               <button onClick={() => setDeleteModal({ show: false, item: null, menu: '' })} className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl hover:text-slate-200 transition">Batal</button>
