@@ -18,7 +18,8 @@ import {
   Download,
   Printer,
   Calendar,
-  Filter
+  Filter,
+  Info
 } from 'lucide-react';
 
 function DatePicker({ value, onChange, placeholder = "Pilih Tanggal" }) {
@@ -148,6 +149,109 @@ function DatePicker({ value, onChange, placeholder = "Pilih Tanggal" }) {
   );
 }
 
+/**
+ * Fungsi pembantu untuk membuat log transaksi keuangan otomatis
+ * berdasarkan input penugasan kru di form pelanggan (Customer).
+ */
+const generateAutoFinanceLogs = (customer, panduanList) => {
+  const logs = [];
+  const baseId = customer.id;
+  const paket = panduanList.find(p => p.id === customer.paketId);
+  
+  if (!paket) return logs;
+  
+  const tanggal = customer.tanggal || new Date().toISOString().split('T')[0];
+  const suffix = customer.plat ? ` (${customer.plat})` : '';
+  
+  // 1. Catat Pemasukan Remap
+  logs.push({
+    id: `${baseId}-masuk`,
+    tanggal,
+    tipe: 'Pemasukan',
+    plat: customer.plat,
+    crew: customer.crew || '',
+    amount: Number(paket.hargaRemap || 0),
+    keterangan: `Pemasukan Remap: ${paket.nama}${suffix}`,
+    isAuto: true
+  });
+  
+  // 2. Catat Benefit Crew Pembawa (Pengeluaran)
+  if (Number(paket.benefit) > 0 && customer.crew) {
+    logs.push({
+      id: `${baseId}-benefit-pembawa`,
+      tanggal,
+      tipe: 'Pengeluaran',
+      plat: customer.plat,
+      crew: customer.crew,
+      amount: Number(paket.benefit || 0),
+      keterangan: `Benefit Crew Pembawa: ${customer.crew}${suffix}`,
+      isAuto: true
+    });
+  }
+  
+  // 3. Catat Benefit Tuner (Pengeluaran - Rp250.000)
+  if (customer.tuner) {
+    logs.push({
+      id: `${baseId}-benefit-tuner`,
+      tanggal,
+      tipe: 'Pengeluaran',
+      plat: customer.plat,
+      crew: customer.tuner,
+      amount: 250000,
+      keterangan: `Benefit Tuner: ${customer.tuner}${suffix}`,
+      isAuto: true
+    });
+  }
+  
+  // 4. Catat Benefit Remote (Pengeluaran - Rp150.000)
+  if (customer.remote) {
+    logs.push({
+      id: `${baseId}-benefit-remote`,
+      tanggal,
+      tipe: 'Pengeluaran',
+      plat: customer.plat,
+      crew: customer.remote,
+      amount: 150000,
+      keterangan: `Benefit Remote: ${customer.remote}${suffix}`,
+      isAuto: true
+    });
+  }
+  
+  // 5. Catat Benefit Support (Pengeluaran - Rp50.000 per crew)
+  const selectedSupports = Array.isArray(customer.support) 
+    ? customer.support 
+    : (customer.support ? customer.support.split(',').map(s => s.trim()).filter(Boolean) : []);
+    
+  selectedSupports.forEach((sup, idx) => {
+    logs.push({
+      id: `${baseId}-benefit-support-${idx}`,
+      tanggal,
+      tipe: 'Pengeluaran',
+      plat: customer.plat,
+      crew: sup,
+      amount: 50000,
+      keterangan: `Benefit Support: ${sup}${suffix}`,
+      isAuto: true
+    });
+  });
+  
+  // 6. Catat Fee Perantara (Pengeluaran - jika ada)
+  if (customer.perantara && Number(customer.perantaraFee) > 0) {
+    logs.push({
+      id: `${baseId}-fee-perantara`,
+      tanggal,
+      tipe: 'Pengeluaran',
+      plat: customer.plat,
+      crew: customer.crew || '',
+      amount: Number(customer.perantaraFee || 0),
+      keterangan: `Fee Perantara: ${customer.perantara}${suffix}`,
+      isAuto: true
+    });
+  }
+  
+  return logs;
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showFormPanel, setShowFormPanel] = useState(false);
@@ -163,6 +267,7 @@ export default function App() {
   const [filterDateEnd, setFilterDateEnd] = useState('');
   const [filterPaket, setFilterPaket] = useState('');
 
+  // Initial Data dari LocalStorage
   const [data, setData] = useState(() => {
     const saved = localStorage.getItem('tuningkhan_pro');
     const initialData = {
@@ -189,19 +294,20 @@ export default function App() {
     const { name, value } = e.target;
     const newFormData = { ...formData, [name]: value };
 
-    // Otomatisasi menu keuangan ketika Plat dipilih
+    // Otomatisasi menu keuangan ketika Plat dipilih (Khusus Pemasukan)
     if (activeTab === 'finance') {
       if (name === 'plat') {
         const customer = data.customers.find(c => c.plat === value);
         if (customer) {
-          newFormData.crew = customer.crew;
+          // Set crew bawaan menjadi Crew Pembawa (customer.crew)
+          newFormData.crew = customer.crew || '';
           const paket = data.panduan.find(p => p.id === customer.paketId);
           
           if (paket) {
-            if (newFormData.tipe === 'Benefit') {
-              newFormData.amount = paket.benefit;
-            } else if (newFormData.tipe === 'Pemasukan') {
+            if (newFormData.tipe === 'Pemasukan') {
               newFormData.amount = paket.hargaRemap;
+            } else {
+              newFormData.amount = '';
             }
           }
         }
@@ -213,9 +319,7 @@ export default function App() {
         if (customer) {
           const paket = data.panduan.find(p => p.id === customer.paketId);
           if (paket) {
-            if (value === 'Benefit') {
-              newFormData.amount = paket.benefit;
-            } else if (value === 'Pemasukan') {
+            if (value === 'Pemasukan') {
               newFormData.amount = paket.hargaRemap;
             } else {
               newFormData.amount = '';
@@ -232,12 +336,40 @@ export default function App() {
     e.preventDefault();
     const saveItem = { ...formData, id: editingId || Date.now().toString() };
     
-    setData(prev => ({
-      ...prev,
-      [activeTab]: editingId 
-        ? prev[activeTab].map(item => item.id === editingId ? saveItem : item)
-        : [...prev[activeTab], saveItem]
-    }));
+    setData(prev => {
+      let updatedCustomers = prev.customers;
+      let updatedFinance = prev.finance;
+      
+      if (activeTab === 'customers') {
+        // 1. Simpan atau perbarui list pelanggan
+        updatedCustomers = editingId 
+          ? prev.customers.map(item => item.id === editingId ? saveItem : item)
+          : [...prev.customers, saveItem];
+          
+        // 2. Hapus log keuangan otomatis yang lama untuk pelanggan ini (jika sedang mengedit)
+        updatedFinance = prev.finance.filter(f => !(f.isAuto && f.id.startsWith(saveItem.id)));
+        
+        // 3. Buat ulang log keuangan otomatis yang baru
+        const newAutoLogs = generateAutoFinanceLogs(saveItem, prev.panduan);
+        
+        // 4. Masukkan log otomatis ke data keuangan
+        updatedFinance = [...updatedFinance, ...newAutoLogs];
+        
+        return {
+          ...prev,
+          customers: updatedCustomers,
+          finance: updatedFinance
+        };
+      } else {
+        // Logika default untuk tab selain pelanggan (crew, panduan, manual finance)
+        return {
+          ...prev,
+          [activeTab]: editingId 
+            ? prev[activeTab].map(item => item.id === editingId ? saveItem : item)
+            : [...prev[activeTab], saveItem]
+        };
+      }
+    });
     
     setFormData({});
     setEditingId(null);
@@ -283,10 +415,28 @@ export default function App() {
 
   const executeDelete = () => {
     const { item, menu } = deleteModal;
-    setData(prev => ({
-      ...prev,
-      [menu]: prev[menu].filter(i => i.id !== item.id)
-    }));
+    
+    setData(prev => {
+      if (menu === 'customers') {
+        // 1. Hapus data pelanggan dari list
+        const updatedCustomers = prev.customers.filter(i => i.id !== item.id);
+        // 2. Bersihkan seluruh log keuangan otomatis yang terkait dengan pelanggan ini
+        const updatedFinance = prev.finance.filter(f => !(f.isAuto && f.id.startsWith(item.id)));
+        
+        return {
+          ...prev,
+          customers: updatedCustomers,
+          finance: updatedFinance
+        };
+      } else {
+        // Hapus biasa untuk menu lain
+        return {
+          ...prev,
+          [menu]: prev[menu].filter(i => i.id !== item.id)
+        };
+      }
+    });
+    
     setDeleteModal({ show: false, item: null, menu: '' });
   };
 
@@ -295,10 +445,108 @@ export default function App() {
   };
 
   const calculateCrewBenefit = (crewName) => {
-    return data.finance
-      .filter(f => f.crew === crewName && f.tipe === 'Benefit')
+    // 1. Manual registered 'Benefit' transactions (untuk kompatibilitas data lama jika ada)
+    const manualBenefits = data.finance
+      .filter(f => f.crew === crewName && f.tipe === 'Benefit' && !f.isAuto)
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+    // 2. Kalkulasi benefit otomatis dari peran penugasan di data klien
+    let autoBenefits = 0;
+    data.customers.forEach(customer => {
+      // Tuner: Rp250.000
+      if (customer.tuner === crewName) {
+        autoBenefits += 250000;
+      }
+      // Remote: Rp150.000
+      if (customer.remote === crewName) {
+        autoBenefits += 150000;
+      }
+      // Support: Rp50.000 (bisa memilih lebih dari 1 crew)
+      if (Array.isArray(customer.support) && customer.support.includes(crewName)) {
+        autoBenefits += 50000;
+      } else if (typeof customer.support === 'string' && customer.support.split(',').map(s => s.trim()).includes(crewName)) {
+        autoBenefits += 50000;
+      }
+    });
+
+    return manualBenefits + autoBenefits;
   };
+
+  // Kalkulasi Keuangan Komprehensif dengan Otomatisasi Terintegrasi
+  const getFinancialAnalysis = () => {
+    // 1. Kas Pemasukan Manual (dari tabel Keuangan, abaikan log otomatis agar tidak double counting)
+    const manualPemasukan = data.finance
+      .filter(f => f.tipe === 'Pemasukan' && !f.isAuto)
+      .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+
+    // 2. Kas Pengeluaran Manual (dari tabel Keuangan, abaikan log otomatis agar tidak double counting)
+    const manualPengeluaran = data.finance
+      .filter(f => f.tipe === 'Pengeluaran' && !f.isAuto)
+      .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+
+    // 3. Kas Benefit Manual (jika ada sisa transaksi lama di tabel keuangan)
+    const manualBenefits = data.finance
+      .filter(f => f.tipe === 'Benefit' && !f.isAuto)
+      .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+
+    // Komponen Akumulasi Otomatis dari Customer Data
+    let totalHargaRemap = 0;
+    let totalBenefitCrewPembawa = 0;
+    let totalBenefitTuner = 0;
+    let totalBenefitRemote = 0;
+    let totalBenefitSupport = 0;
+    let totalPerantaraFee = 0;
+
+    data.customers.forEach(c => {
+      const paket = data.panduan.find(p => p.id === c.paketId);
+      if (paket) {
+        totalHargaRemap += Number(paket.hargaRemap || 0);
+        totalBenefitCrewPembawa += Number(paket.benefit || 0);
+      }
+      if (c.tuner) totalBenefitTuner += 250000;
+      if (c.remote) totalBenefitRemote += 150000;
+      if (Array.isArray(c.support)) {
+        totalBenefitSupport += c.support.length * 50000;
+      } else if (c.support) {
+        totalBenefitSupport += c.support.split(',').filter(Boolean).length * 50000;
+      }
+      totalPerantaraFee += Number(c.perantaraFee || 0);
+    });
+
+    // Total Benefit Otomatis yang diperoleh crew dari data customer
+    const totalBenefitAuto = totalBenefitCrewPembawa + totalBenefitTuner + totalBenefitRemote + totalBenefitSupport;
+    
+    // Total Pengeluaran Otomatis (Seluruh Benefit Crew + Fee Perantara)
+    const totalPengeluaranOtomatis = totalBenefitAuto + totalPerantaraFee;
+
+    // PENGGABUNGAN REALTIME (MANUAL + OTOMATIS CUSTOMER)
+    // Pemasukan Kumulatif = Pemasukan Manual + Harga Remap Otomatis
+    const totalPemasukanKumulatif = manualPemasukan + totalHargaRemap;
+    
+    // Pengeluaran Kumulatif = Pengeluaran Manual + Seluruh Benefit Otomatis + Fee Perantara
+    const totalPengeluaranKumulatif = manualPengeluaran + totalPengeluaranOtomatis;
+    
+    const totalBenefitAccumulated = manualBenefits + totalBenefitAuto;
+
+    // FORMULA UTAMA SALDO BERSIH:
+    // Total Pemasukan Kumulatif - Total Pengeluaran Kumulatif
+    const totalSaldoBersih = totalPemasukanKumulatif - totalPengeluaranKumulatif;
+
+    return {
+      totalPemasukan: totalPemasukanKumulatif, 
+      totalPengeluaran: totalPengeluaranKumulatif, 
+      totalBenefit: totalBenefitAccumulated,
+      totalSaldoBersih,
+      totalHargaRemap,
+      totalBenefitCrewPembawa,
+      totalBenefitTuner,
+      totalBenefitRemote,
+      totalBenefitSupport,
+      totalPerantaraFee
+    };
+  };
+
+  const financialStats = getFinancialAnalysis();
 
   const formatDateDisplay = (dateStr) => {
     if (!dateStr) return '-';
@@ -316,7 +564,7 @@ export default function App() {
     let rows = [];
     
     if (tabName === 'customers') {
-      headers = ['Tanggal', 'Nama Pelanggan', 'No. Plat', 'Tipe Mobil', 'Paket Remap', 'Crew Bertugas'];
+      headers = ['Tanggal', 'Nama Pelanggan', 'No. Plat', 'Tipe Mobil', 'Warna', 'VIN', 'Paket Remap', 'Crew Pembawa', 'Tuner', 'Remote', 'Support', 'Nama Perantara', 'Fee Perantara'];
       rows = items.map(item => {
         const p = data.panduan.find(x => x.id === item.paketId);
         return [
@@ -324,8 +572,15 @@ export default function App() {
           item.nama || '',
           item.plat || '',
           item.mobil || '',
+          item.warna || '',
+          item.vin || '',
           p ? p.nama : '-',
-          item.crew || ''
+          item.crew || '',
+          item.tuner || '',
+          item.remote || '',
+          Array.isArray(item.support) ? item.support.join(', ') : (item.support || ''),
+          item.perantara || '',
+          item.perantaraFee || 0
         ];
       });
     } else if (tabName === 'crews') {
@@ -377,7 +632,7 @@ export default function App() {
     let tableRowsHTML = '';
     
     if (tabName === 'customers') {
-      tableHeadersHTML = '<tr><th>Tanggal</th><th>Nama</th><th>No. Plat</th><th>Mobil</th><th>Paket</th><th>Crew</th></tr>';
+      tableHeadersHTML = '<tr><th>Tanggal</th><th>Nama</th><th>No. Plat</th><th>Mobil</th><th>Warna</th><th>VIN</th><th>Paket</th><th>Crew Pembawa</th><th>Tuner</th><th>Remote</th><th>Support</th><th>Perantara</th><th>Fee</th></tr>';
       tableRowsHTML = items.map(item => {
         const p = data.panduan.find(x => x.id === item.paketId);
         return `<tr>
@@ -385,8 +640,15 @@ export default function App() {
           <td><b>${item.nama}</b></td>
           <td><span style="font-family: monospace; background: #1e293b; color: #f8fafc; padding: 3px 6px; border-radius: 4px;">${item.plat}</span></td>
           <td>${item.mobil}</td>
+          <td>${item.warna || '-'}</td>
+          <td style="font-family: monospace; font-size: 11px;">${item.vin || '-'}</td>
           <td>${p ? p.nama : '-'}</td>
-          <td>${item.crew}</td>
+          <td>${item.crew || '-'}</td>
+          <td style="color: #10b981; font-weight: 500;">${item.tuner || '-'}</td>
+          <td style="color: #06b6d4; font-weight: 500;">${item.remote || '-'}</td>
+          <td style="color: #6366f1; font-size: 11px;">${Array.isArray(item.support) ? item.support.join(', ') : (item.support || '-')}</td>
+          <td>${item.perantara || '-'}</td>
+          <td>${formatRupiah(item.perantaraFee || 0)}</td>
         </tr>`;
       }).join('');
     } else if (tabName === 'crews') {
@@ -472,9 +734,20 @@ export default function App() {
           item.nama?.toLowerCase().includes(searchQuery.toLowerCase()) ||
           item.plat?.toLowerCase().includes(searchQuery.toLowerCase()) ||
           item.mobil?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.crew?.toLowerCase().includes(searchQuery.toLowerCase());
+          item.vin?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.warna?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.crew?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.tuner?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.remote?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.perantara?.toLowerCase().includes(searchQuery.toLowerCase());
         
-        const matchesCrew = !filterCrew || item.crew === filterCrew;
+        const matchesCrew = !filterCrew || 
+          item.crew === filterCrew ||
+          item.tuner === filterCrew || 
+          item.remote === filterCrew ||
+          (Array.isArray(item.support) && item.support.includes(filterCrew)) ||
+          (typeof item.support === 'string' && item.support.split(',').map(s => s.trim()).includes(filterCrew));
+          
         const matchesPaket = !filterPaket || item.paketId === filterPaket;
         const matchesDate = (!filterDateStart || item.tanggal >= filterDateStart) &&
                             (!filterDateEnd || item.tanggal <= filterDateEnd);
@@ -521,30 +794,35 @@ export default function App() {
 
   const renderDashboardStats = () => {
     const totalCustomers = data.customers.length;
-    const totalPemasukan = data.finance.filter(f => f.tipe === 'Pemasukan').reduce((sum, f) => sum + Number(f.amount || 0), 0);
-    const totalPengeluaran = data.finance.filter(f => f.tipe === 'Pengeluaran').reduce((sum, f) => sum + Number(f.amount || 0), 0);
     
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-orange-500/30 transition-all duration-300">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-orange-500/30 transition duration-300">
             <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Pelanggan</p>
             <div className="flex items-center justify-between mt-2">
               <h3 className="text-3xl font-extrabold text-orange-500">{totalCustomers} Unit</h3>
               <Users size={32} className="text-slate-700" />
             </div>
           </div>
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-emerald-500/30 transition-all duration-300">
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Pemasukan</p>
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-emerald-500/30 transition duration-300">
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Saldo Bersih</p>
             <div className="flex items-center justify-between mt-2">
-              <h3 className="text-2xl font-extrabold text-emerald-400">{formatRupiah(totalPemasukan)}</h3>
+              <h3 className="text-2xl font-extrabold text-amber-400">{formatRupiah(financialStats.totalSaldoBersih)}</h3>
+              <DollarSign size={32} className="text-slate-700" />
+            </div>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-emerald-500/30 transition duration-300">
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Pemasukan (Kumulatif)</p>
+            <div className="flex items-center justify-between mt-2">
+              <h3 className="text-2xl font-extrabold text-emerald-400">{formatRupiah(financialStats.totalPemasukan)}</h3>
               <TrendingUp size={32} className="text-slate-700" />
             </div>
           </div>
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-red-500/30 transition-all duration-300">
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Pengeluaran</p>
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-red-500/30 transition duration-300">
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Pengeluaran (Kumulatif)</p>
             <div className="flex items-center justify-between mt-2">
-              <h3 className="text-2xl font-extrabold text-red-400">{formatRupiah(totalPengeluaran)}</h3>
+              <h3 className="text-2xl font-extrabold text-red-400">{formatRupiah(financialStats.totalPengeluaran)}</h3>
               <TrendingDown size={32} className="text-slate-700" />
             </div>
           </div>
@@ -562,7 +840,7 @@ export default function App() {
                   <div key={index} className="flex justify-between items-center border-b border-slate-800 pb-3 last:border-0 last:pb-0">
                     <div>
                       <p className="font-bold text-slate-200">{item.mobil} <span className="text-slate-500 font-normal">({item.plat})</span></p>
-                      <p className="text-xs text-slate-500">Pelanggan: {item.nama} | Teknisi: {item.crew}</p>
+                      <p className="text-xs text-slate-400">Pelanggan: {item.nama} | Crew Pembawa: {item.crew} | Tuner: <span className="text-emerald-400 font-medium">{item.tuner || '-'}</span> | Remote: <span className="text-cyan-400 font-medium">{item.remote || '-'}</span></p>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold text-orange-400">{pkg ? pkg.nama : '-'}</p>
@@ -581,7 +859,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 flex font-sans text-slate-200">
       
-      {}
+      {/* Sidebar navigation */}
       <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between">
         <div>
           <div className="p-6 border-b border-slate-800">
@@ -619,7 +897,7 @@ export default function App() {
         </div>
       </aside>
 
-      {}
+      {/* Main Panel content header */}
       <main className="flex-1 flex flex-col overflow-hidden">
         
         <header className="bg-slate-900 border-b border-slate-800 h-16 flex items-center justify-between px-8 shadow-md">
@@ -661,7 +939,7 @@ export default function App() {
               </div>
             )}
 
-            {}
+            {/* FORMULIR CRUD */}
             {showFormPanel && (
               <div className="bg-slate-900 border-2 border-orange-500/30 p-6 rounded-xl shadow-xl transition-all duration-300">
                 <h3 className="text-base font-bold text-slate-100 border-b border-slate-800 pb-3 mb-4 flex items-center">
@@ -710,6 +988,14 @@ export default function App() {
                         <input type="text" name="mobil" value={formData.mobil || ''} onChange={handleInputChange} placeholder="Innova Reborn / Civic Turbo" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
                       </div>
                       <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Warna Mobil</label>
+                        <input type="text" name="warna" value={formData.warna || ''} onChange={handleInputChange} placeholder="Hitam / Putih / Silver" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">VIN (No. Rangka)</label>
+                        <input type="text" name="vin" value={formData.vin || ''} onChange={handleInputChange} placeholder="MHR17xxxxxxxxxxxx" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                      </div>
+                      <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">No. HP Pelanggan</label>
                         <input type="text" name="phone" value={formData.phone || ''} onChange={handleInputChange} placeholder="08123xxxxxx" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
                       </div>
@@ -727,13 +1013,74 @@ export default function App() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Crew Bertugas</label>
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Crew Pembawa (Membawa Pelanggan)</label>
                         <select name="crew" value={formData.crew || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
-                          <option value="">-- Pilih Anggota Crew --</option>
+                          <option value="">-- Pilih Crew Pembawa --</option>
                           {data.crews.map(c => (
                             <option key={c.id} value={c.nama}>{c.nama}</option>
                           ))}
                         </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pilihan Tuner (Rp250.000 Benefit)</label>
+                        <select name="tuner" value={formData.tuner || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                          <option value="">-- Pilih Tuner --</option>
+                          {data.crews.map(c => (
+                            <option key={c.id} value={c.nama}>{c.nama}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pilihan Remote (Rp150.000 Benefit, Opsional)</label>
+                        <select name="remote" value={formData.remote || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                          <option value="">-- Pilih Remote --</option>
+                          {data.crews.map(c => (
+                            <option key={c.id} value={c.nama}>{c.nama}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Perantara / Sales (Opsional)</label>
+                        <input type="text" name="perantara" value={formData.perantara || ''} onChange={handleInputChange} placeholder="Nama Perantara" className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Fee Perantara (Rp) (Opsional)</label>
+                        <input type="number" name="perantaraFee" value={formData.perantaraFee || ''} onChange={handleInputChange} placeholder="Contoh: 100000" className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                      </div>
+
+                      {/* Interactive support checklist box */}
+                      <div className="md:col-span-2">
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Pilihan Support (Rp50.000 Benefit, Bisa Lebih Dari 1)</label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-slate-950 border border-slate-800 p-3 rounded-lg max-h-40 overflow-y-auto">
+                          {data.crews.map(c => {
+                            const selectedSupports = Array.isArray(formData.support) 
+                              ? formData.support 
+                              : (formData.support ? formData.support.split(',').map(s => s.trim()) : []);
+                            const isChecked = selectedSupports.includes(c.nama);
+                            
+                            const handleSupportToggle = () => {
+                              let newSupports;
+                              if (isChecked) {
+                                newSupports = selectedSupports.filter(name => name !== c.nama);
+                              } else {
+                                newSupports = [...selectedSupports, c.nama];
+                              }
+                              setFormData(prev => ({ ...prev, support: newSupports }));
+                            };
+
+                            return (
+                              <label key={c.id} className="flex items-center gap-2 text-slate-300 text-sm cursor-pointer hover:text-slate-100 transition select-none">
+                                <input 
+                                  type="checkbox" 
+                                  checked={isChecked} 
+                                  onChange={handleSupportToggle}
+                                  className="rounded border-slate-800 bg-slate-900 text-orange-500 focus:ring-orange-500 h-4 w-4"
+                                />
+                                <span>{c.nama}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
                       </div>
                     </>
                   )}
@@ -762,11 +1109,11 @@ export default function App() {
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tipe Alur Kas</label>
+                        {/* Menjadikan hanya 2 pilihan: Pemasukan dan Pengeluaran sesuai permintaan */}
                         <select name="tipe" value={formData.tipe || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
                           <option value="">-- Pilih Tipe --</option>
                           <option value="Pemasukan">Pemasukan</option>
                           <option value="Pengeluaran">Pengeluaran</option>
-                          <option value="Benefit">Benefit (Bonus Crew)</option>
                         </select>
                       </div>
                       <div>
@@ -808,83 +1155,120 @@ export default function App() {
               </div>
             )}
 
-            {}
+            {/* TAB-SPECIFIC KONTROL DAN PANEL */}
             {activeTab !== 'dashboard' && (
-              <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="space-y-4">
                 
-                {/* Search & Filter Controls Group */}
-                <div className="flex flex-wrap items-center gap-3 flex-1">
-                  
-                  {/* Global Search Input */}
-                  <div className="relative flex-1 min-w-[200px] max-w-sm">
-                    <Search className="absolute left-3 top-2.5 text-slate-600" size={18} />
-                    <input 
-                      type="text" 
-                      placeholder="Cari data..." 
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-orange-500"
-                    />
+                {/* MENU STATS KEUNGAN YANG DINAMIS DAN TRANSPARAN */}
+                {activeTab === 'finance' && (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
+                    <div className="bg-slate-950/60 p-4 border border-orange-500/20 rounded-xl flex flex-col justify-between relative group overflow-hidden">
+                      <div className="absolute right-3 top-3 text-orange-500/20">
+                        <DollarSign size={24} />
+                      </div>
+                      <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                        Total Saldo Bersih 
+                        <span className="cursor-pointer text-slate-400 hover:text-slate-200" title="Formula: (Pemasukan Manual + Harga Remap Customer) - (Pengeluaran Manual + Semua Komisi/Benefit Crew + Fee Perantara)">
+                          <Info size={12} />
+                        </span>
+                      </p>
+                      <h3 className="text-xl font-extrabold text-amber-500 mt-2">{formatRupiah(financialStats.totalSaldoBersih)}</h3>
+                      <p className="text-[9px] text-slate-500 mt-1 font-mono">Formula Terbuka Aktif</p>
+                    </div>
+
+                    <div className="bg-slate-950/60 p-4 border border-emerald-500/10 rounded-xl flex flex-col justify-between">
+                      <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Pemasukan (Kumulatif)</p>
+                      <h3 className="text-xl font-extrabold text-emerald-400 mt-2">{formatRupiah(financialStats.totalPemasukan)}</h3>
+                      <p className="text-[9px] text-emerald-600 mt-1 font-semibold flex items-center gap-1">
+                        <TrendingUp size={10} /> Kas Manual + Harga Remap
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-950/60 p-4 border border-red-500/10 rounded-xl flex flex-col justify-between">
+                      <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Pengeluaran (Kumulatif)</p>
+                      <h3 className="text-xl font-extrabold text-red-400 mt-2">{formatRupiah(financialStats.totalPengeluaran)}</h3>
+                      <p className="text-[9px] text-red-600 mt-1 font-semibold flex items-center gap-1">
+                        <TrendingDown size={10} /> Kas Manual + Benefit + Perantara
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-950/60 p-4 border border-indigo-500/10 rounded-xl flex flex-col justify-between">
+                      <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Benefit Crew</p>
+                      <h3 className="text-xl font-extrabold text-indigo-400 mt-2">{formatRupiah(financialStats.totalBenefit)}</h3>
+                      <p className="text-[9px] text-slate-500 mt-1">Manual + Otomatis Peran</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-3 flex-1">
+                    
+                    {/* Global Search Input */}
+                    <div className="relative flex-1 min-w-[200px] max-w-sm">
+                      <Search className="absolute left-3 top-2.5 text-slate-600" size={18} />
+                      <input 
+                        type="text" 
+                        placeholder="Cari data..." 
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-orange-500"
+                      />
+                    </div>
+
+                    {activeTab === 'customers' && (
+                      <select
+                        value={filterCrew}
+                        onChange={(e) => setFilterCrew(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-slate-300 focus:outline-none focus:border-orange-500"
+                      >
+                        <option value="">Semua Crew</option>
+                        {data.crews.map(c => <option key={c.id} value={c.nama}>{c.nama}</option>)}
+                      </select>
+                    )}
+
+                    {(activeTab === 'customers' || activeTab === 'finance') && (
+                      <div className="flex items-center gap-2">
+                        <div className="w-40">
+                          <DatePicker 
+                            value={filterDateStart} 
+                            onChange={setFilterDateStart} 
+                            placeholder="Mulai Tanggal" 
+                          />
+                        </div>
+                        <span className="text-slate-600 text-xs font-bold">-</span>
+                        <div className="w-40">
+                          <DatePicker 
+                            value={filterDateEnd} 
+                            onChange={setFilterDateEnd} 
+                            placeholder="Sampai Tanggal" 
+                          />
+                        </div>
+                      </div>
+                    )}
+
                   </div>
 
-                  {/* Tab-specific Dropdown Filters */}
-                  {activeTab === 'customers' && (
-                    <>
-                      <select
-                value={filterCrew}
-                onChange={(e) => setFilterCrew(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-slate-300 focus:outline-none focus:border-orange-500"
-              >
-                <option value="">Semua Crew</option>
-                {data.crews.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-              </select>
-            </>
-          )}
+                  {/* Export Buttons UI */}
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => exportToCSV(activeTab, filteredItems)}
+                      className="bg-slate-950 border border-slate-800 hover:border-emerald-500/30 hover:bg-emerald-500/10 text-slate-300 hover:text-emerald-400 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2"
+                      title="Ekspor ke format Excel (CSV)"
+                    >
+                      <Download size={14} />
+                      <span>Excel</span>
+                    </button>
+                    <button 
+                      onClick={() => exportToPDF(activeTab, filteredItems)}
+                      className="bg-slate-950 border border-slate-800 hover:border-orange-500/30 hover:bg-orange-500/10 text-slate-300 hover:text-orange-400 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2"
+                      title="Cetak Laporan / Simpan PDF"
+                    >
+                      <Printer size={14} />
+                      <span>PDF</span>
+                    </button>
+                  </div>
 
-          {}
-          {/* Range Date Filters for Customers & Finance */}
-          {(activeTab === 'customers' || activeTab === 'finance') && (
-            <div className="flex items-center gap-2">
-              <div className="w-40">
-                <DatePicker 
-                  value={filterDateStart} 
-                  onChange={setFilterDateStart} 
-                  placeholder="Mulai Tanggal" 
-                />
-              </div>
-              <span className="text-slate-600 text-xs font-bold">-</span>
-              <div className="w-40">
-                <DatePicker 
-                  value={filterDateEnd} 
-                  onChange={setFilterDateEnd} 
-                  placeholder="Sampai Tanggal" 
-                />
-              </div>
-            </div>
-          )}
-
-        </div>
-
-        {/* Export Buttons UI Component */}
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => exportToCSV(activeTab, filteredItems)}
-                    className="bg-slate-950 border border-slate-800 hover:border-emerald-500/30 hover:bg-emerald-500/10 text-slate-300 hover:text-emerald-400 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2"
-                    title="Ekspor ke format Excel (CSV)"
-                  >
-                    <Download size={14} />
-                    <span>Excel</span>
-                  </button>
-                  <button 
-                    onClick={() => exportToPDF(activeTab, filteredItems)}
-                    className="bg-slate-950 border border-slate-800 hover:border-orange-500/30 hover:bg-orange-500/10 text-slate-300 hover:text-orange-400 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2"
-                    title="Cetak Laporan / Simpan PDF"
-                  >
-                    <Printer size={14} />
-                    <span>PDF</span>
-                  </button>
                 </div>
-
               </div>
             )}
 
@@ -912,8 +1296,15 @@ export default function App() {
                             <th className="p-4">Nama Pelanggan</th>
                             <th className="p-4">No. Plat</th>
                             <th className="p-4">Tipe Mobil</th>
+                            <th className="p-4">Warna</th>
+                            <th className="p-4">VIN</th>
                             <th className="p-4">Paket</th>
-                            <th className="p-4">Teknisi Bertugas</th>
+                            <th className="p-4">Crew Pembawa</th>
+                            <th className="p-4">Tuner</th>
+                            <th className="p-4">Remote</th>
+                            <th className="p-4">Support</th>
+                            <th className="p-4">Perantara</th>
+                            <th className="p-4">Fee Perantara</th>
                           </>
                         )}
 
@@ -966,15 +1357,26 @@ export default function App() {
                               <>
                                 <td className="p-4 text-slate-400 text-xs">{formatDateDisplay(item.tanggal)}</td>
                                 <td className="p-4 font-bold text-slate-200">{item.nama}</td>
-                                <td className="p-4 font-mono text-xs"><span className="bg-slate-950 border border-slate-800 px-2 py-1 rounded text-orange-400 font-semibold">{item.plat}</span></td>
+                                <td className="p-4 font-mono text-xs">
+                                  <span className="bg-slate-950 border border-slate-800 px-2 py-1 rounded text-orange-400 font-semibold">{item.plat}</span>
+                                </td>
                                 <td className="p-4 text-slate-400">{item.mobil}</td>
+                                <td className="p-4 text-slate-400">{item.warna || '-'}</td>
+                                <td className="p-4 font-mono text-xs text-slate-400">{item.vin || '-'}</td>
                                 <td className="p-4 text-slate-300">
                                   {(() => {
                                     const p = data.panduan.find(x => x.id === item.paketId);
                                     return p ? p.nama : '-';
                                   })()}
                                 </td>
-                                <td className="p-4 text-slate-400">{item.crew}</td>
+                                <td className="p-4 text-slate-400">{item.crew || '-'}</td>
+                                <td className="p-4 text-emerald-400 font-medium">{item.tuner || '-'}</td>
+                                <td className="p-4 text-cyan-400 font-medium">{item.remote || '-'}</td>
+                                <td className="p-4 text-indigo-400 text-sm max-w-[150px] truncate" title={Array.isArray(item.support) ? item.support.join(', ') : (item.support || '-')}>
+                                  {Array.isArray(item.support) ? item.support.join(', ') : (item.support || '-')}
+                                </td>
+                                <td className="p-4 text-slate-400">{item.perantara || '-'}</td>
+                                <td className="p-4 text-slate-400">{formatRupiah(item.perantaraFee || 0)}</td>
                               </>
                             )}
 
