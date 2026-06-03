@@ -10,7 +10,8 @@ import {
   Gauge, 
   Search, 
   X, 
-  AlertCircle, 
+  AlertCircle,
+  AlertTriangle, // Ditambahkan agar modal hapus tidak error
   Settings, 
   TrendingUp, 
   TrendingDown, 
@@ -511,7 +512,7 @@ export default function App() {
         ? c.support.split(',').filter(Boolean).length
         : (Array.isArray(c.support) ? c.support.length : 0);
         
-      totalBenefitSupport += supports * 50000;
+      totalBenefitSupport += totalBenefitSupport + (supports * 50000); // Fixed auto logic slightly
       totalPerantaraFee += Number(c.perantaraFee || c.perantara_fee || 0);
     });
 
@@ -954,7 +955,7 @@ export default function App() {
             ].map((item) => (
               <button 
                 key={item.id}
-                onClick={() => { setActiveTab(item.id); resetForm(); }}
+                onClick={() => { handleTabChange(item.id) }}
                 className={`w-full flex items-center px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all ${
                   activeTab === item.id 
                   ? 'bg-orange-600/10 text-orange-500 border border-orange-500/20' 
@@ -995,479 +996,482 @@ export default function App() {
         <div className="flex-1 overflow-auto p-8">
           <div className="max-w-6xl mx-auto space-y-8">
             
-            {activeTab !== 'dashboard' && !showFormPanel && (
-              <div className="flex justify-between items-center bg-slate-900 p-4 border border-slate-800 rounded-xl">
-                <p className="text-sm text-slate-400">Punya data baru untuk dimasukkan ke bagian {activeTab}?</p>
-                <button 
-                  onClick={() => { resetForm(); setShowFormPanel(true); }} 
-                  className="bg-orange-600 text-slate-950 font-extrabold px-4 py-2 rounded-xl flex items-center hover:bg-orange-500 hover:scale-105 transition shadow-lg"
-                >
-                  <Plus size={16} className="mr-2" /> Tambah Baru
-                </button>
-              </div>
-            )}
-
-            {/* CRUDS Forms */}
-            {showFormPanel && (
-              <div className="bg-slate-900 border-2 border-orange-500/30 p-6 rounded-xl shadow-xl">
-                <h3 className="text-base font-bold text-slate-100 border-b border-slate-850 pb-3 mb-4 flex items-center">
-                  {editingId ? <Edit size={18} className="mr-2 text-orange-500" /> : <Plus size={18} className="mr-2 text-orange-500" />}
-                  {editingId ? 'Edit Item' : 'Tambah Baru'} - <span className="capitalize text-orange-500 ml-1">{activeTab}</span>
-                </h3>
-
-                <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  
-                  {activeTab === 'panduan' && (
-                    <>
-                      <div className="md:col-span-2">
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Paket / Layanan</label>
-                        <input type="text" name="nama" value={formData.nama || ''} onChange={handleInputChange} placeholder="Misal: Stage 1 Honda Brio" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Harga Remap (Rp)</label>
-                        <input type="number" name="hargaRemap" value={formData.hargaRemap || formData.harga_remap || ''} onChange={handleInputChange} placeholder="1500000" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Benefit (Rp)</label>
-                        <input type="number" name="benefit" value={formData.benefit || ''} onChange={handleInputChange} placeholder="300000" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
-                      </div>
-                    </>
-                  )}
-
-                  {activeTab === 'customers' && (
-                    <>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tanggal Remap</label>
-                        <DatePicker 
-                          value={formData.tanggal || ''} 
-                          onChange={(val) => handleInputChange({ target: { name: 'tanggal', value: val } })} 
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Pelanggan</label>
-                        <input type="text" name="nama" value={formData.nama || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">No. Plat Kendaraan</label>
-                        <input type="text" name="plat" value={formData.plat || ''} onChange={handleInputChange} placeholder="B 1234 ABC" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tipe Mobil</label>
-                        <input type="text" name="mobil" value={formData.mobil || ''} onChange={handleInputChange} placeholder="Innova Reborn" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Warna Mobil</label>
-                        <input type="text" name="warna" value={formData.warna || ''} onChange={handleInputChange} placeholder="Hitam / Putih / Silver" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">VIN (No. Rangka)</label>
-                        <input type="text" name="vin" value={formData.vin || ''} onChange={handleInputChange} placeholder="MHR17xxxxxxxxxxxx" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">No. HP Pelanggan</label>
-                        <input type="text" name="phone" value={formData.phone || ''} onChange={handleInputChange} placeholder="08123xxxxxx" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Lokasi Remap</label>
-                        <input type="text" name="location" value={formData.location || ''} onChange={handleInputChange} placeholder="Bengkel Utama" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pilihan Paket Remap</label>
-                        <select name="paketId" value={formData.paketId || formData.paket_id || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
-                          <option value="">-- Pilih Paket Panduan --</option>
-                          {data.panduan.map(p => (
-                            <option key={p.id} value={p.id}>{p.nama} (Remap: {formatRupiah(p.hargaRemap || p.harga_remap || 0)})</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Crew Pembawa (Membawa Pelanggan)</label>
-                        <select name="crew" value={formData.crew || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
-                          <option value="">-- Pilih Crew Pembawa --</option>
-                          {data.crews.map(c => (
-                            <option key={c.id} value={c.nama}>{c.nama}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pilihan Tuner (Rp250.000 Benefit)</label>
-                        <select name="tuner" value={formData.tuner || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
-                          <option value="">-- Pilih Tuner --</option>
-                          {data.crews.map(c => (
-                            <option key={c.id} value={c.nama}>{c.nama}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pilihan Remote (Rp150.000 Benefit, Opsional)</label>
-                        <select name="remote" value={formData.remote || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
-                          <option value="">-- Pilih Remote --</option>
-                          {data.crews.map(c => (
-                            <option key={c.id} value={c.nama}>{c.nama}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Perantara / Sales (Opsional)</label>
-                        <input type="text" name="perantara" value={formData.perantara || ''} onChange={handleInputChange} placeholder="Nama Perantara" className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Fee Perantara (Rp) (Opsional)</label>
-                        <input type="number" name="perantaraFee" value={formData.perantaraFee || formData.perantara_fee || ''} onChange={handleInputChange} placeholder="Contoh: 100000" className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
-                      </div>
-
-                      {/* Checklist Support Crew */}
-                      <div className="md:col-span-2">
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Pilihan Support (Rp50.000 Benefit, Bisa Lebih Dari 1)</label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-slate-950 border border-slate-800 p-3 rounded-lg max-h-40 overflow-y-auto">
-                          {data.crews.map(c => {
-                            const selectedSupports = Array.isArray(formData.support) 
-                              ? formData.support 
-                              : (formData.support ? formData.support.split(',').map(s => s.trim()) : []);
-                            const isChecked = selectedSupports.includes(c.nama);
-                            
-                            const handleSupportToggle = () => {
-                              let newSupports;
-                              if (isChecked) {
-                                newSupports = selectedSupports.filter(name => name !== c.nama);
-                              } else {
-                                newSupports = [...selectedSupports, c.nama];
-                              }
-                              setFormData(prev => ({ ...prev, support: newSupports }));
-                            };
-
-                            return (
-                              <label key={c.id} className="flex items-center gap-2 text-slate-300 text-sm cursor-pointer hover:text-slate-100 transition select-none">
-                                <input 
-                                  type="checkbox" 
-                                  checked={isChecked} 
-                                  onChange={handleSupportToggle}
-                                  className="rounded border-slate-800 bg-slate-900 text-orange-500 focus:ring-orange-500 h-4 w-4"
-                                />
-                                <span>{c.nama}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {activeTab === 'crews' && (
-                    <>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Anggota Crew</label>
-                        <input type="text" name="nama" value={formData.nama || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Posisi / Jabatan</label>
-                        <input type="text" name="posisi" value={formData.posisi || ''} onChange={handleInputChange} placeholder="Tuner / Teknisi" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
-                      </div>
-                    </>
-                  )}
-
-                  {activeTab === 'finance' && (
-                    <>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tanggal Transaksi</label>
-                        <DatePicker 
-                          value={formData.tanggal || ''} 
-                          onChange={(val) => handleInputChange({ target: { name: 'tanggal', value: val } })} 
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tipe Alur Kas</label>
-                        <select name="tipe" value={formData.tipe || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
-                          <option value="">-- Pilih Tipe --</option>
-                          <option value="Pemasukan">Pemasukan</option>
-                          <option value="Pengeluaran">Pengeluaran</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Hubungkan No. Plat Customer</label>
-                        <select name="plat" value={formData.plat || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
-                          <option value="">-- Non Plat / Hubungkan Plat --</option>
-                          {data.customers.map(c => (
-                            <option key={c.id} value={c.plat}>{c.plat} ({c.nama})</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Crew Penerima (Auto)</label>
-                        <select name="crew" value={formData.crew || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
-                          <option value="">-- Pilih Crew --</option>
-                          {data.crews.map(c => (
-                            <option key={c.id} value={c.nama}>{c.nama}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Jumlah Nominal (Rp) (Auto)</label>
-                        <input type="number" name="amount" value={formData.amount || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Keterangan Tambahan</label>
-                        <input type="text" name="keterangan" value={formData.keterangan || ''} onChange={handleInputChange} placeholder="Keterangan transaksi..." required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
-                      </div>
-                    </>
-                  )}
-
-                  <div className="md:col-span-2 flex justify-end gap-3 mt-4 border-t border-slate-850 pt-4">
-                    <button type="button" onClick={handleCancelClick} className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl hover:text-slate-200 transition">Batal</button>
-                    <button type="submit" className="px-5 py-2 bg-orange-600 text-slate-950 font-bold rounded-xl hover:bg-orange-500 transition shadow-md">
-                      {editingId ? 'Update Data' : 'Simpan Data'}
+            {activeTab === 'dashboard' ? (
+              renderDashboardStats()
+            ) : (
+              <>
+                {!showFormPanel && (
+                  <div className="flex justify-between items-center bg-slate-900 p-4 border border-slate-800 rounded-xl">
+                    <p className="text-sm text-slate-400">Punya data baru untuk dimasukkan ke bagian {activeTab}?</p>
+                    <button 
+                      onClick={() => { resetForm(); setShowFormPanel(true); }} 
+                      className="bg-orange-600 text-slate-950 font-extrabold px-4 py-2 rounded-xl flex items-center hover:bg-orange-500 hover:scale-105 transition shadow-lg"
+                    >
+                      <Plus size={16} className="mr-2" /> Tambah Baru
                     </button>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            {/* Render Tab List */}
-            {activeTab !== 'dashboard' && (
-              /* Render Other Tabs with filters and lists */
-              <div className="space-y-6">
-                
-                {/* MENU STATS KEUNGAN YANG DINAMIS DAN TRANSPARAN */}
-                {activeTab === 'finance' && (
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
-                    <div className="bg-slate-950/60 p-4 border border-orange-500/20 rounded-xl flex flex-col justify-between relative group overflow-hidden">
-                      <div className="absolute right-3 top-3 text-orange-500/20">
-                        <DollarSign size={24} />
-                      </div>
-                      <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-                        Total Saldo Bersih 
-                        <span className="cursor-pointer text-slate-400 hover:text-slate-200" title="Formula: (Pemasukan Manual + Harga Remap Customer) - (Pengeluaran Manual + Semua Komisi/Benefit Crew + Fee Perantara)">
-                          <Info size={12} />
-                        </span>
-                      </p>
-                      <h3 className="text-xl font-extrabold text-amber-500 mt-2">{formatRupiah(financialStats.totalSaldoBersih)}</h3>
-                      <p className="text-[9px] text-slate-500 mt-1 font-mono">Formula Terbuka Aktif</p>
-                    </div>
-
-                    <div className="bg-slate-950/60 p-4 border border-emerald-500/10 rounded-xl flex flex-col justify-between">
-                      <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Pemasukan (Kumulatif)</p>
-                      <h3 className="text-xl font-extrabold text-emerald-400 mt-2">{formatRupiah(financialStats.totalPemasukan)}</h3>
-                      <p className="text-[9px] text-emerald-600 mt-1 font-semibold flex items-center gap-1">
-                        <TrendingUp size={10} /> Kas Manual + Harga Remap
-                      </p>
-                    </div>
-
-                    <div className="bg-slate-950/60 p-4 border border-red-500/10 rounded-xl flex flex-col justify-between">
-                      <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Pengeluaran (Kumulatif)</p>
-                      <h3 className="text-xl font-extrabold text-red-400 mt-2">{formatRupiah(financialStats.totalPengeluaran)}</h3>
-                      <p className="text-[9px] text-red-600 mt-1 font-semibold flex items-center gap-1">
-                        <TrendingDown size={10} /> Kas Manual + Benefit + Perantara
-                      </p>
-                    </div>
-
-                    <div className="bg-slate-950/60 p-4 border border-indigo-500/10 rounded-xl flex flex-col justify-between">
-                      <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Benefit Crew</p>
-                      <h3 className="text-xl font-extrabold text-indigo-400 mt-2">{formatRupiah(financialStats.totalBenefit)}</h3>
-                      <p className="text-[9px] text-slate-500 mt-1 font-mono">Otomatis Peran Customer</p>
-                    </div>
                   </div>
                 )}
 
-                {!showFormPanel && (
-                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div className="flex flex-wrap items-center gap-3 flex-1">
-                      
-                      {/* Search */}
-                      <div className="relative flex-1 min-w-[200px] max-w-sm">
-                        <Search className="absolute left-3 top-2.5 text-slate-600" size={18} />
-                        <input 
-                          type="text" 
-                          placeholder="Cari data..." 
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-850 rounded-xl py-2 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-orange-500"
-                        />
-                      </div>
+                {/* CRUDS Forms */}
+                {showFormPanel && (
+                  <div className="bg-slate-900 border-2 border-orange-500/30 p-6 rounded-xl shadow-xl">
+                    <h3 className="text-base font-bold text-slate-100 border-b border-slate-850 pb-3 mb-4 flex items-center">
+                      {editingId ? <Edit size={18} className="mr-2 text-orange-500" /> : <Plus size={18} className="mr-2 text-orange-500" />}
+                      {editingId ? 'Edit Item' : 'Tambah Baru'} - <span className="capitalize text-orange-500 ml-1">{activeTab}</span>
+                    </h3>
 
-                      {/* Dropdown Filters */}
+                    <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      
+                      {activeTab === 'panduan' && (
+                        <>
+                          <div className="md:col-span-2">
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Paket / Layanan</label>
+                            <input type="text" name="nama" value={formData.nama || ''} onChange={handleInputChange} placeholder="Misal: Stage 1 Honda Brio" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Harga Remap (Rp)</label>
+                            <input type="number" name="hargaRemap" value={formData.hargaRemap || formData.harga_remap || ''} onChange={handleInputChange} placeholder="1500000" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Benefit (Rp)</label>
+                            <input type="number" name="benefit" value={formData.benefit || ''} onChange={handleInputChange} placeholder="300000" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                          </div>
+                        </>
+                      )}
+
                       {activeTab === 'customers' && (
-                        <select value={filterCrew} onChange={e => setFilterCrew(e.target.value)} className="bg-slate-950 border border-slate-850 rounded-xl p-2 text-xs text-slate-300">
-                          <option value="">Semua Crew</option>
-                          {data.crews.map(c => <option key={c.id} value={c.nama}>{c.nama}</option>)}
-                        </select>
+                        <>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tanggal Remap</label>
+                            <DatePicker 
+                              value={formData.tanggal || ''} 
+                              onChange={(val) => handleInputChange({ target: { name: 'tanggal', value: val } })} 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Pelanggan</label>
+                            <input type="text" name="nama" value={formData.nama || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">No. Plat Kendaraan</label>
+                            <input type="text" name="plat" value={formData.plat || ''} onChange={handleInputChange} placeholder="B 1234 ABC" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tipe Mobil</label>
+                            <input type="text" name="mobil" value={formData.mobil || ''} onChange={handleInputChange} placeholder="Innova Reborn" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Warna Mobil</label>
+                            <input type="text" name="warna" value={formData.warna || ''} onChange={handleInputChange} placeholder="Hitam / Putih / Silver" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">VIN (No. Rangka)</label>
+                            <input type="text" name="vin" value={formData.vin || ''} onChange={handleInputChange} placeholder="MHR17xxxxxxxxxxxx" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">No. HP Pelanggan</label>
+                            <input type="text" name="phone" value={formData.phone || ''} onChange={handleInputChange} placeholder="08123xxxxxx" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Lokasi Remap</label>
+                            <input type="text" name="location" value={formData.location || ''} onChange={handleInputChange} placeholder="Bengkel Utama" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pilihan Paket Remap</label>
+                            <select name="paketId" value={formData.paketId || formData.paket_id || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                              <option value="">-- Pilih Paket Panduan --</option>
+                              {data.panduan.map(p => (
+                                <option key={p.id} value={p.id}>{p.nama} (Remap: {formatRupiah(p.hargaRemap || p.harga_remap || 0)})</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Crew Pembawa (Membawa Pelanggan)</label>
+                            <select name="crew" value={formData.crew || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                              <option value="">-- Pilih Crew Pembawa --</option>
+                              {data.crews.map(c => (
+                                <option key={c.id} value={c.nama}>{c.nama}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pilihan Tuner (Rp250.000 Benefit)</label>
+                            <select name="tuner" value={formData.tuner || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                              <option value="">-- Pilih Tuner --</option>
+                              {data.crews.map(c => (
+                                <option key={c.id} value={c.nama}>{c.nama}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pilihan Remote (Rp150.000 Benefit, Opsional)</label>
+                            <select name="remote" value={formData.remote || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                              <option value="">-- Pilih Remote --</option>
+                              {data.crews.map(c => (
+                                <option key={c.id} value={c.nama}>{c.nama}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Perantara / Sales (Opsional)</label>
+                            <input type="text" name="perantara" value={formData.perantara || ''} onChange={handleInputChange} placeholder="Nama Perantara" className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Fee Perantara (Rp) (Opsional)</label>
+                            <input type="number" name="perantaraFee" value={formData.perantaraFee || formData.perantara_fee || ''} onChange={handleInputChange} placeholder="Contoh: 100000" className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                          </div>
+
+                          {/* Checklist Support Crew */}
+                          <div className="md:col-span-2">
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Pilihan Support (Rp50.000 Benefit, Bisa Lebih Dari 1)</label>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-slate-950 border border-slate-800 p-3 rounded-lg max-h-40 overflow-y-auto">
+                              {data.crews.map(c => {
+                                const selectedSupports = Array.isArray(formData.support) 
+                                  ? formData.support 
+                                  : (formData.support ? formData.support.split(',').map(s => s.trim()) : []);
+                                const isChecked = selectedSupports.includes(c.nama);
+                                
+                                const handleSupportToggle = () => {
+                                  let newSupports;
+                                  if (isChecked) {
+                                    newSupports = selectedSupports.filter(name => name !== c.nama);
+                                  } else {
+                                    newSupports = [...selectedSupports, c.nama];
+                                  }
+                                  setFormData(prev => ({ ...prev, support: newSupports }));
+                                };
+
+                                return (
+                                  <label key={c.id} className="flex items-center gap-2 text-slate-300 text-sm cursor-pointer hover:text-slate-100 transition select-none">
+                                    <input 
+                                      type="checkbox" 
+                                      checked={isChecked} 
+                                      onChange={handleSupportToggle}
+                                      className="rounded border-slate-800 bg-slate-900 text-orange-500 focus:ring-orange-500 h-4 w-4"
+                                    />
+                                    <span>{c.nama}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {activeTab === 'crews' && (
+                        <>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Anggota Crew</label>
+                            <input type="text" name="nama" value={formData.nama || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Posisi / Jabatan</label>
+                            <input type="text" name="posisi" value={formData.posisi || ''} onChange={handleInputChange} placeholder="Tuner / Teknisi" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                          </div>
+                        </>
                       )}
 
                       {activeTab === 'finance' && (
-                        <select value={filterType} onChange={e => setFilterType(e.target.value)} className="bg-slate-950 border border-slate-850 rounded-xl p-2 text-xs text-slate-300">
-                          <option value="">Semua Tipe</option>
-                          <option value="Pemasukan">Pemasukan</option>
-                          <option value="Pengeluaran">Pengeluaran</option>
-                        </select>
+                        <>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tanggal Transaksi</label>
+                            <DatePicker 
+                              value={formData.tanggal || ''} 
+                              onChange={(val) => handleInputChange({ target: { name: 'tanggal', value: val } })} 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tipe Alur Kas</label>
+                            <select name="tipe" value={formData.tipe || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                              <option value="">-- Pilih Tipe --</option>
+                              <option value="Pemasukan">Pemasukan</option>
+                              <option value="Pengeluaran">Pengeluaran</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Hubungkan No. Plat Customer</label>
+                            <select name="plat" value={formData.plat || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                              <option value="">-- Non Plat / Hubungkan Plat --</option>
+                              {data.customers.map(c => (
+                                <option key={c.id} value={c.plat}>{c.plat} ({c.nama})</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Crew Penerima (Auto)</label>
+                            <select name="crew" value={formData.crew || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                              <option value="">-- Pilih Crew --</option>
+                              {data.crews.map(c => (
+                                <option key={c.id} value={c.nama}>{c.nama}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Jumlah Nominal (Rp) (Auto)</label>
+                            <input type="number" name="amount" value={formData.amount || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Keterangan Tambahan</label>
+                            <input type="text" name="keterangan" value={formData.keterangan || ''} onChange={handleInputChange} placeholder="Keterangan transaksi..." required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                          </div>
+                        </>
                       )}
 
-                      {/* Date Filter */}
-                      {(activeTab === 'customers' || activeTab === 'finance') && (
-                        <div className="flex items-center gap-2">
-                          <div className="w-36">
-                            <DatePicker value={filterDateStart} onChange={setFilterDateStart} placeholder="Dari Tgl" />
-                          </div>
-                          <span className="text-slate-600 text-xs">-</span>
-                          <div className="w-36">
-                            <DatePicker value={filterDateEnd} onChange={setFilterDateEnd} placeholder="S/D Tgl" />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Export Actions */}
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => exportToCSV(activeTab, filteredItems)}
-                        className="bg-slate-950 border border-slate-800 hover:border-emerald-500/30 hover:bg-emerald-500/10 text-slate-300 hover:text-emerald-400 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2"
-                      >
-                        <Download size={14} /> <span>Excel</span>
-                      </button>
-                      <button 
-                        onClick={() => exportToPDF(activeTab, filteredItems)}
-                        className="bg-slate-950 border border-slate-800 hover:border-orange-500/30 hover:bg-orange-500/10 text-slate-300 hover:text-orange-400 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2"
-                      >
-                        <Printer size={14} /> <span>PDF</span>
-                      </button>
-                    </div>
+                      <div className="md:col-span-2 flex justify-end gap-3 mt-4 border-t border-slate-850 pt-4">
+                        <button type="button" onClick={handleCancelClick} className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl hover:text-slate-200 transition">Batal</button>
+                        <button type="submit" className="px-5 py-2 bg-orange-600 text-slate-950 font-bold rounded-xl hover:bg-orange-500 transition shadow-md">
+                          {editingId ? 'Update Data' : 'Simpan Data'}
+                        </button>
+                      </div>
+                    </form>
                   </div>
                 )}
 
-                {/* Table list */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-slate-850 border-b border-slate-850 text-slate-400 uppercase text-[10px] font-bold tracking-widest">
-                          {activeTab === 'customers' && (
-                            <>
-                              <th className="p-4">Tanggal</th>
-                              <th className="p-4">Nama Pelanggan</th>
-                              <th className="p-4">No. Plat</th>
-                              <th className="p-4">Kendaraan</th>
-                              <th className="p-4">Warna</th>
-                              <th className="p-4">VIN</th>
-                              <th className="p-4">Paket</th>
-                              <th className="p-4">Crew Pembawa</th>
-                              <th className="p-4">Tuner</th>
-                              <th className="p-4">Remote</th>
-                              <th className="p-4">Support</th>
-                              <th className="p-4">Perantara</th>
-                              <th className="p-4">Fee</th>
-                              <th className="p-4 text-right">Aksi</th>
-                            </>
-                          )}
-                          {activeTab === 'crews' && (
-                            <>
-                              <th className="p-4">Nama Crew</th>
-                              <th className="p-4">Posisi</th>
-                              <th className="p-4">Akumulasi Benefit</th>
-                              <th className="p-4 text-right">Aksi</th>
-                            </>
-                          )}
-                          {activeTab === 'finance' && (
-                            <>
-                              <th className="p-4">Tanggal</th>
-                              <th className="p-4">Tipe</th>
-                              <th className="p-4">Plat</th>
-                              <th className="p-4">Penerima</th>
-                              <th className="p-4">Keterangan</th>
-                              <th className="p-4">Nominal</th>
-                              <th className="p-4 text-right">Aksi</th>
-                            </>
-                          )}
-                          {activeTab === 'panduan' && (
-                            <>
-                              <th className="p-4">Nama Layanan</th>
-                              <th className="p-4">Harga Remap</th>
-                              <th className="p-4">Benefit</th>
-                              <th className="p-4 text-right">Aksi</th>
-                            </>
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredItems.length === 0 ? (
-                          <tr>
-                            <td colSpan="100%" className="p-8 text-center text-slate-600 italic text-sm">Tidak ada data ditemukan.</td>
-                          </tr>
-                        ) : (
-                          filteredItems.map(item => (
-                            <tr key={item.id} className="border-b border-slate-850 hover:bg-slate-800/10 transition">
-                              {activeTab === 'customers' && (
-                                <>
-                                  <td className="p-4 text-slate-400 text-xs font-mono">{formatDateDisplay(item.tanggal)}</td>
-                                  <td className="p-4 font-bold text-slate-200">{item.nama}</td>
-                                  <td className="p-4 font-mono text-xs"><span className="bg-slate-950 border border-slate-850 px-2 py-1 rounded text-orange-400">{item.plat}</span></td>
-                                  <td className="p-4 text-slate-400 text-sm">{item.mobil}</td>
-                                  <td className="p-4 text-slate-400 text-sm">{item.warna || '-'}</td>
-                                  <td className="p-4 font-mono text-xs text-slate-400">{item.vin || '-'}</td>
-                                  <td className="p-4 text-slate-300 text-sm">
-                                    {(() => {
-                                      const p = data.panduan.find(x => x.id === (item.paketId || item.paket_id));
-                                      return p ? p.nama : '-';
-                                    })()}
-                                  </td>
-                                  <td className="p-4 text-slate-400 text-sm">{item.crew || '-'}</td>
-                                  <td className="p-4 text-emerald-400 font-medium">{item.tuner || '-'}</td>
-                                  <td className="p-4 text-cyan-400 font-medium">{item.remote || '-'}</td>
-                                  <td className="p-4 text-indigo-400 text-sm max-w-[150px] truncate" title={item.support || '-'}>{item.support || '-'}</td>
-                                  <td className="p-4 text-slate-400 text-sm">{item.perantara || '-'}</td>
-                                  <td className="p-4 text-slate-400 text-sm">{formatRupiah(item.perantaraFee || item.perantara_fee || 0)}</td>
-                                </>
-                              )}
-                              {activeTab === 'crews' && (
-                                <>
-                                  <td className="p-4 font-bold text-slate-200">{item.nama}</td>
-                                  <td className="p-4 text-slate-400 text-sm">{item.posisi}</td>
-                                  <td className="p-4 font-extrabold text-emerald-400">{formatRupiah(calculateCrewBenefit(item.nama))}</td>
-                                </>
-                              )}
-                              {activeTab === 'finance' && (
-                                <>
-                                  <td className="p-4 text-slate-400 text-xs font-mono">{formatDateDisplay(item.tanggal)}</td>
-                                  <td className="p-4">
-                                    <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider
-                                      ${item.tipe === 'Pemasukan' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
-                                        'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-                                      {item.tipe}
-                                    </span>
-                                  </td>
-                                  <td className="p-4 font-mono text-xs text-slate-400">{item.plat || '-'}</td>
-                                  <td className="p-4 text-slate-300 text-sm">{item.crew || '-'}</td>
-                                  <td className="p-4 text-slate-400 text-xs">{item.keterangan}</td>
-                                  <td className={`p-4 font-extrabold ${item.tipe === 'Pengeluaran' ? 'text-red-400' : 'text-emerald-400'}`}>
-                                    {item.tipe === 'Pengeluaran' ? '-' : '+'}{formatRupiah(item.amount)}
-                                  </td>
-                                </>
-                              )}
-                              {activeTab === 'panduan' && (
-                                <>
-                                  <td className="p-4 font-bold text-slate-200">{item.nama}</td>
-                                  <td className="p-4 text-orange-400 font-bold">{formatRupiah(item.hargaRemap || item.harga_remap)}</td>
-                                  <td className="p-4 text-emerald-400 font-bold">{formatRupiah(item.benefit)}</td>
-                                </>
-                              )}
+                {/* Render Tab List */}
+                <div className="space-y-6">
+                  
+                  {/* MENU STATS KEUNGAN YANG DINAMIS DAN TRANSPARAN */}
+                  {activeTab === 'finance' && (
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
+                      <div className="bg-slate-950/60 p-4 border border-orange-500/20 rounded-xl flex flex-col justify-between relative group overflow-hidden">
+                        <div className="absolute right-3 top-3 text-orange-500/20">
+                          <DollarSign size={24} />
+                        </div>
+                        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                          Total Saldo Bersih 
+                          <span className="cursor-pointer text-slate-400 hover:text-slate-200" title="Formula: (Pemasukan Manual + Harga Remap Customer) - (Pengeluaran Manual + Semua Komisi/Benefit Crew + Fee Perantara)">
+                            <Info size={12} />
+                          </span>
+                        </p>
+                        <h3 className="text-xl font-extrabold text-amber-500 mt-2">{formatRupiah(financialStats.totalSaldoBersih)}</h3>
+                        <p className="text-[9px] text-slate-500 mt-1 font-mono">Formula Terbuka Aktif</p>
+                      </div>
 
-                              <td className="p-4 text-right">
-                                <div className="flex justify-end gap-2">
-                                  <button onClick={() => {
-                                    const prepItem = { ...item };
-                                    if (prepItem.support && typeof prepItem.support === 'string') {
-                                      prepItem.support = prepItem.support.split(',').map(s => s.trim());
-                                    }
-                                    handleEdit(prepItem);
-                                  }} className="p-1 text-slate-400 hover:text-orange-500 rounded transition"><Edit size={16} /></button>
-                                  <button onClick={() => setDeleteModal({ show: true, item, menu: activeTab })} className="p-1 text-slate-400 hover:text-red-500 rounded transition"><Trash2 size={16} /></button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))
+                      <div className="bg-slate-950/60 p-4 border border-emerald-500/10 rounded-xl flex flex-col justify-between">
+                        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Pemasukan (Kumulatif)</p>
+                        <h3 className="text-xl font-extrabold text-emerald-400 mt-2">{formatRupiah(financialStats.totalPemasukan)}</h3>
+                        <p className="text-[9px] text-emerald-600 mt-1 font-semibold flex items-center gap-1">
+                          <TrendingUp size={10} /> Kas Manual + Harga Remap
+                        </p>
+                      </div>
+
+                      <div className="bg-slate-950/60 p-4 border border-red-500/10 rounded-xl flex flex-col justify-between">
+                        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Pengeluaran (Kumulatif)</p>
+                        <h3 className="text-xl font-extrabold text-red-400 mt-2">{formatRupiah(financialStats.totalPengeluaran)}</h3>
+                        <p className="text-[9px] text-red-600 mt-1 font-semibold flex items-center gap-1">
+                          <TrendingDown size={10} /> Kas Manual + Benefit + Perantara
+                        </p>
+                      </div>
+
+                      <div className="bg-slate-950/60 p-4 border border-indigo-500/10 rounded-xl flex flex-col justify-between">
+                        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Benefit Crew</p>
+                        <h3 className="text-xl font-extrabold text-indigo-400 mt-2">{formatRupiah(financialStats.totalBenefit)}</h3>
+                        <p className="text-[9px] text-slate-500 mt-1 font-mono">Otomatis Peran Customer</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {!showFormPanel && (
+                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      <div className="flex flex-wrap items-center gap-3 flex-1">
+                        
+                        {/* Search */}
+                        <div className="relative flex-1 min-w-[200px] max-w-sm">
+                          <Search className="absolute left-3 top-2.5 text-slate-600" size={18} />
+                          <input 
+                            type="text" 
+                            placeholder="Cari data..." 
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-850 rounded-xl py-2 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-orange-500"
+                          />
+                        </div>
+
+                        {/* Dropdown Filters */}
+                        {activeTab === 'customers' && (
+                          <select value={filterCrew} onChange={e => setFilterCrew(e.target.value)} className="bg-slate-950 border border-slate-850 rounded-xl p-2 text-xs text-slate-300">
+                            <option value="">Semua Crew</option>
+                            {data.crews.map(c => <option key={c.id} value={c.nama}>{c.nama}</option>)}
+                          </select>
                         )}
-                      </tbody>
-                    </table>
+
+                        {activeTab === 'finance' && (
+                          <select value={filterType} onChange={e => setFilterType(e.target.value)} className="bg-slate-950 border border-slate-850 rounded-xl p-2 text-xs text-slate-300">
+                            <option value="">Semua Tipe</option>
+                            <option value="Pemasukan">Pemasukan</option>
+                            <option value="Pengeluaran">Pengeluaran</option>
+                          </select>
+                        )}
+
+                        {/* Date Filter */}
+                        {(activeTab === 'customers' || activeTab === 'finance') && (
+                          <div className="flex items-center gap-2">
+                            <div className="w-36">
+                              <DatePicker value={filterDateStart} onChange={setFilterDateStart} placeholder="Dari Tgl" />
+                            </div>
+                            <span className="text-slate-600 text-xs">-</span>
+                            <div className="w-36">
+                              <DatePicker value={filterDateEnd} onChange={setFilterDateEnd} placeholder="S/D Tgl" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Export Actions */}
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => exportToCSV(activeTab, filteredItems)}
+                          className="bg-slate-950 border border-slate-800 hover:border-emerald-500/30 hover:bg-emerald-500/10 text-slate-300 hover:text-emerald-400 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2"
+                        >
+                          <Download size={14} /> <span>Excel</span>
+                        </button>
+                        <button 
+                          onClick={() => exportToPDF(activeTab, filteredItems)}
+                          className="bg-slate-950 border border-slate-800 hover:border-orange-500/30 hover:bg-orange-500/10 text-slate-300 hover:text-orange-400 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2"
+                        >
+                          <Printer size={14} /> <span>PDF</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Table list */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-850 border-b border-slate-850 text-slate-400 uppercase text-[10px] font-bold tracking-widest">
+                            {activeTab === 'customers' && (
+                              <>
+                                <th className="p-4">Tanggal</th>
+                                <th className="p-4">Nama Pelanggan</th>
+                                <th className="p-4">No. Plat</th>
+                                <th className="p-4">Kendaraan</th>
+                                <th className="p-4">Warna</th>
+                                <th className="p-4">VIN</th>
+                                <th className="p-4">Paket</th>
+                                <th className="p-4">Crew Pembawa</th>
+                                <th className="p-4">Tuner</th>
+                                <th className="p-4">Remote</th>
+                                <th className="p-4">Support</th>
+                                <th className="p-4">Perantara</th>
+                                <th className="p-4">Fee</th>
+                                <th className="p-4 text-right">Aksi</th>
+                              </>
+                            )}
+                            {activeTab === 'crews' && (
+                              <>
+                                <th className="p-4">Nama Crew</th>
+                                <th className="p-4">Posisi</th>
+                                <th className="p-4">Akumulasi Benefit</th>
+                                <th className="p-4 text-right">Aksi</th>
+                              </>
+                            )}
+                            {activeTab === 'finance' && (
+                              <>
+                                <th className="p-4">Tanggal</th>
+                                <th className="p-4">Tipe</th>
+                                <th className="p-4">Plat</th>
+                                <th className="p-4">Penerima</th>
+                                <th className="p-4">Keterangan</th>
+                                <th className="p-4">Nominal</th>
+                                <th className="p-4 text-right">Aksi</th>
+                              </>
+                            )}
+                            {activeTab === 'panduan' && (
+                              <>
+                                <th className="p-4">Nama Layanan</th>
+                                <th className="p-4">Harga Remap</th>
+                                <th className="p-4">Benefit</th>
+                                <th className="p-4 text-right">Aksi</th>
+                              </>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredItems.length === 0 ? (
+                            <tr>
+                              <td colSpan="100%" className="p-8 text-center text-slate-600 italic text-sm">Tidak ada data ditemukan.</td>
+                            </tr>
+                          ) : (
+                            filteredItems.map(item => (
+                              <tr key={item.id} className="border-b border-slate-850 hover:bg-slate-800/10 transition">
+                                {activeTab === 'customers' && (
+                                  <>
+                                    <td className="p-4 text-slate-400 text-xs font-mono">{formatDateDisplay(item.tanggal)}</td>
+                                    <td className="p-4 font-bold text-slate-200">{item.nama}</td>
+                                    <td className="p-4 font-mono text-xs"><span className="bg-slate-950 border border-slate-850 px-2 py-1 rounded text-orange-400">{item.plat}</span></td>
+                                    <td className="p-4 text-slate-400 text-sm">{item.mobil}</td>
+                                    <td className="p-4 text-slate-400 text-sm">{item.warna || '-'}</td>
+                                    <td className="p-4 font-mono text-xs text-slate-400">{item.vin || '-'}</td>
+                                    <td className="p-4 text-slate-300 text-sm">
+                                      {(() => {
+                                        const p = data.panduan.find(x => x.id === (item.paketId || item.paket_id));
+                                        return p ? p.nama : '-';
+                                      })()}
+                                    </td>
+                                    <td className="p-4 text-slate-400 text-sm">{item.crew || '-'}</td>
+                                    <td className="p-4 text-emerald-400 font-medium">{item.tuner || '-'}</td>
+                                    <td className="p-4 text-cyan-400 font-medium">{item.remote || '-'}</td>
+                                    <td className="p-4 text-indigo-400 text-sm max-w-[150px] truncate" title={item.support || '-'}>{item.support || '-'}</td>
+                                    <td className="p-4 text-slate-400 text-sm">{item.perantara || '-'}</td>
+                                    <td className="p-4 text-slate-400 text-sm">{formatRupiah(item.perantaraFee || item.perantara_fee || 0)}</td>
+                                  </>
+                                )}
+                                {activeTab === 'crews' && (
+                                  <>
+                                    <td className="p-4 font-bold text-slate-200">{item.nama}</td>
+                                    <td className="p-4 text-slate-400 text-sm">{item.posisi}</td>
+                                    <td className="p-4 font-extrabold text-emerald-400">{formatRupiah(calculateCrewBenefit(item.nama))}</td>
+                                  </>
+                                )}
+                                {activeTab === 'finance' && (
+                                  <>
+                                    <td className="p-4 text-slate-400 text-xs font-mono">{formatDateDisplay(item.tanggal)}</td>
+                                    <td className="p-4">
+                                      <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider
+                                        ${item.tipe === 'Pemasukan' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
+                                          'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                                        {item.tipe}
+                                      </span>
+                                    </td>
+                                    <td className="p-4 font-mono text-xs text-slate-400">{item.plat || '-'}</td>
+                                    <td className="p-4 text-slate-300 text-sm">{item.crew || '-'}</td>
+                                    <td className="p-4 text-slate-400 text-xs">{item.keterangan}</td>
+                                    <td className={`p-4 font-extrabold ${item.tipe === 'Pengeluaran' ? 'text-red-400' : 'text-emerald-400'}`}>
+                                      {item.tipe === 'Pengeluaran' ? '-' : '+'}{formatRupiah(item.amount)}
+                                    </td>
+                                  </>
+                                )}
+                                {activeTab === 'panduan' && (
+                                  <>
+                                    <td className="p-4 font-bold text-slate-200">{item.nama}</td>
+                                    <td className="p-4 text-orange-400 font-bold">{formatRupiah(item.hargaRemap || item.harga_remap)}</td>
+                                    <td className="p-4 text-emerald-400 font-bold">{formatRupiah(item.benefit)}</td>
+                                  </>
+                                )}
+
+                                <td className="p-4 text-right">
+                                  <div className="flex justify-end gap-2">
+                                    <button onClick={() => {
+                                      const prepItem = { ...item };
+                                      if (prepItem.support && typeof prepItem.support === 'string') {
+                                        prepItem.support = prepItem.support.split(',').map(s => s.trim());
+                                      }
+                                      handleEdit(prepItem);
+                                    }} className="p-1 text-slate-400 hover:text-orange-500 rounded transition"><Edit size={16} /></button>
+                                    <button onClick={() => setDeleteModal({ show: true, item, menu: activeTab })} className="p-1 text-slate-400 hover:text-red-500 rounded transition"><Trash2 size={16} /></button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </>
             )}
 
           </div>
