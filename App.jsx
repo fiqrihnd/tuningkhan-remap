@@ -521,7 +521,7 @@ export default function App() {
             if (finError) throw finError;
           }
         } else {
-          // General saving untuk crews, panduan, dan manual finance
+          // General saving untuk crews, panduan, and manual finance
           const dbItem = toSnakeCase(saveItem);
           const { error: itemError } = await supabaseClient
             .from(activeTab)
@@ -672,14 +672,17 @@ export default function App() {
   };
 
   // Perhitungan Benefit crew langsung dari riwayat transaksi keuangan (finance logs)
+  // Menambahkan fungsionalitas filter tanggal (dari / s.d) agar dinamis menghitung kontribusi crew dalam periode tertentu
   const calculateCrewBenefit = (crewName) => {
     return data.finance
-      .filter(f => f.crew === crewName && 
-        (
-          (f.tipe === 'Pengeluaran' && f.isAuto === true && !f.keterangan?.toLowerCase().includes('fee perantara')) || 
-          f.tipe === 'Benefit' || f.tipe === 'Pengeluaran'
-        )
-      )
+      .filter(f => {
+        const matchesCrew = f.crew === crewName;
+        const matchesType = (f.tipe === 'Pengeluaran' && f.isAuto === true && !f.keterangan?.toLowerCase().includes('fee perantara')) || 
+                            f.tipe === 'Benefit' || f.tipe === 'Pengeluaran';
+        const matchesDate = (!filterDateStart || f.tanggal >= filterDateStart) &&
+                            (!filterDateEnd || f.tanggal <= filterDateEnd);
+        return matchesCrew && matchesType && matchesDate;
+      })
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
   };
 
@@ -807,6 +810,7 @@ export default function App() {
         ];
       });
     } else if (tabName === 'crews') {
+      // Menambahkan metadata rentang tanggal pada nama file eksport agar informatif
       headers = ['Nama Crew', 'Posisi', 'Akumulasi Benefit'];
       rows = items.map(item => [item.nama || '', item.posisi || '', calculateCrewBenefit(item.nama)]);
     } else if (tabName === 'finance') {
@@ -817,7 +821,12 @@ export default function App() {
       rows = items.map(item => [item.nama || '', item.hargaRemap || 0, item.benefit || 0]);
     }
     
-    const csvContent = "\uFEFF" + [
+    // Menambahkan informasi header filter tanggal jika digunakan
+    const dateRangeStr = (filterDateStart || filterDateEnd)
+      ? `Filter Tanggal: ${filterDateStart || 'Awal'} s.d ${filterDateEnd || 'Akhir'}\n`
+      : '';
+
+    const csvContent = "\uFEFF" + dateRangeStr + [
       headers.join(','),
       ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
     ].join('\n');
@@ -839,6 +848,11 @@ export default function App() {
     let tableHeadersHTML = '';
     let tableRowsHTML = '';
     
+    // Informasi filter penanggalan
+    const periodeLabel = (filterDateStart || filterDateEnd)
+      ? `${formatDateDisplay(filterDateStart)} s/d ${formatDateDisplay(filterDateEnd)}`
+      : 'Semua Periode';
+
     if (tabName === 'customers') {
       tableHeadersHTML = '<tr><th>Tanggal</th><th>Nama</th><th>No. Plat</th><th>Mobil</th><th>Warna</th><th>VIN</th><th>Paket</th><th>Crew Pembawa</th><th>Tuner</th><th>Remote</th><th>Support</th><th>Perantara</th></tr>';
       tableRowsHTML = items.map(item => {
@@ -859,7 +873,7 @@ export default function App() {
         </tr>`;
       }).join('');
     } else if (tabName === 'crews') {
-      tableHeadersHTML = '<tr><th>Nama Crew</th><th>Posisi</th><th>Akumulasi Benefit</th></tr>';
+      tableHeadersHTML = '<tr><th>Nama Crew</th><th>Posisi</th><th>Akumulasi Benefit (Periode Terpilih)</th></tr>';
       tableRowsHTML = items.map(item => `<tr>
         <td><b>${item.nama}</b></td>
         <td>${item.posisi}</td>
@@ -891,13 +905,15 @@ export default function App() {
           <style>
             body { font-family: sans-serif; padding: 40px; color: #0f172a; background: #fff; }
             h1 { font-size: 24px; color: #f97316; margin: 0; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            .subtitle { color: #64748b; font-size: 14px; margin-top: 5px; margin-bottom: 25px; font-weight: bold; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
             th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
             th { background-color: #f8fafc; color: #475569; }
           </style>
         </head>
         <body>
           <h1>Laporan TuningKhan Pro: ${tabName.toUpperCase()}</h1>
+          <div class="subtitle">Periode Tanggal: ${periodeLabel}</div>
           <table>
             <thead>${tableHeadersHTML}</thead>
             <tbody>${tableRowsHTML}</tbody>
@@ -1169,18 +1185,6 @@ export default function App() {
                 <item.icon size={18} className="mr-3" /> {item.name}
               </button>
             ))}
-
-            {/* Menu Khusus Setelan Database Supabase */}
-            <button 
-              onClick={() => { handleTabChange('db_settings') }}
-              className={`w-full flex items-center px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all ${
-                activeTab === 'db_settings' 
-                ? 'bg-orange-600/10 text-orange-500 border border-orange-500/20' 
-                : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
-              }`}
-            >
-              <Database size={18} className="mr-3" /> Set Database Cloud
-            </button>
           </nav>
         </div>
 
@@ -1221,7 +1225,7 @@ export default function App() {
               renderDashboardStats()
             )}
 
-            {/* TAB SETELAN SUPABASE DATABASE */}
+            {/* TAB SETELAN SUPABASE DATABASE - Disembunyikan dari sidebar navigasi tetapi kode panel setup tetap dipertahankan jika diakses manual */}
             {activeTab === 'db_settings' && (
               <div className="space-y-6">
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
@@ -1658,8 +1662,8 @@ CREATE TABLE finance (
                           </select>
                         )}
 
-                        {/* Date Filter */}
-                        {(activeTab === 'customers' || activeTab === 'finance') && (
+                        {/* Date Filter - Menambahkan filter untuk crews agar bisa menyaring kontribusi benefit */}
+                        {(activeTab === 'customers' || activeTab === 'finance' || activeTab === 'crews') && (
                           <div className="flex items-center gap-2">
                             <div className="w-36">
                               <DatePicker value={filterDateStart} onChange={setFilterDateStart} placeholder="Dari Tgl" />
@@ -1718,7 +1722,7 @@ CREATE TABLE finance (
                               <>
                                 <th className="p-4">Nama Crew</th>
                                 <th className="p-4">Posisi</th>
-                                <th className="p-4">Akumulasi Benefit</th>
+                                <th className="p-4">Akumulasi Benefit (Periode Terpilih)</th>
                                 <th className="p-4 text-right">Aksi</th>
                               </>
                             )}
