@@ -1211,15 +1211,19 @@ export default function App() {
           </div>
         )}
 
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
+       <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
           <div className="text-center space-y-2">
             <div className="mx-auto w-16 h-16 rounded-2xl bg-orange-600/10 border border-orange-500/20 flex items-center justify-center text-orange-500">
               <Lock size={32} />
             </div>
-            <h1 className="text-2xl font-black tracking-tight text-slate-100 mt-4 flex items-center justify-center">
-              <Gauge className="mr-2 text-orange-500" size={26} /> Tuning<span className="text-orange-500">Khan</span>
-            </h1>
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">
+            <div className="flex justify-center mt-4">
+              <img 
+                src="https://media.canva.com/v2/image-resize/format:PNG/height:1350/quality:100/uri:ifs%3A%2F%2FM%2F9d2c3587-cbf0-475e-8959-36bb8409fa59/watermark:F/width:2400?csig=AAAAAAAAAAAAAAAAAAAAALj7E8qy9rKohdQ2fumkegsPpA1EfPg10VGIZr3MyOZj&exp=1781272474&osig=AAAAAAAAAAAAAAAAAAAAAEzmnOG19T_M6baiBetc_CD8Vs6UYnkDRZJKgGh-hsAK&signer=media-rpc&x-canva-quality=screen_3x" 
+                alt="TuningKhan Logo" 
+                className="h-16 w-auto object-contain"
+              />
+            </div>
+            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-2">
               Protected Cloud Administrator
             </p>
           </div>
