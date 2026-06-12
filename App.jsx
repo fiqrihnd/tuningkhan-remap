@@ -1224,7 +1224,7 @@ export default function App() {
               />
             </div>
             <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-2">
-              Protected Cloud Administrator
+              ECU REMAP - TUNE UP - DRAGRACE
             </p>
           </div>
 
@@ -1296,12 +1296,11 @@ export default function App() {
         <div>
           <div className="p-6 border-b border-slate-800 flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-black flex items-center text-orange-500 tracking-tight">
-                <Gauge className="mr-2 text-orange-500" size={28} /> Tuning<span className="text-slate-100 font-bold">Khan</span>
-              </h1>
-              <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-extrabold flex items-center gap-1.5">
-                <span>Cloud Admin</span>
-              </p>
+              <img 
+                src="https://media.canva.com/v2/image-resize/format:PNG/height:1350/quality:100/uri:ifs%3A%2F%2FM%2F9d2c3587-cbf0-475e-8959-36bb8409fa59/watermark:F/width:2400?csig=AAAAAAAAAAAAAAAAAAAAALj7E8qy9rKohdQ2fumkegsPpA1EfPg10VGIZr3MyOZj&exp=1781272474&osig=AAAAAAAAAAAAAAAAAAAAAEzmnOG19T_M6baiBetc_CD8Vs6UYnkDRZJKgGh-hsAK&signer=media-rpc&x-canva-quality=screen_3x" 
+                alt="TuningKhan Logo" 
+                className="h-16 w-auto object-contain"
+              />
             </div>
             
             {/* Close sidebar drawer button on Mobile view */}
