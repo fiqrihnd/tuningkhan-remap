@@ -24,7 +24,10 @@ import {
   Database,
   CheckCircle,
   Copy,
-  Terminal
+  Terminal,
+  Lock,
+  LogOut,
+  Menu // Ditambahkan untuk tombol hamburger mobile
 } from 'lucide-react';
 
 // Memuat Supabase Client secara dinamis dari window (CDN global) untuk menghindari error kompilasi bundler
@@ -40,6 +43,13 @@ const getSupabaseClient = (url, key) => {
 // =========================================================================
 const DEFAULT_SUPABASE_URL = "https://nhjsgcocdzdplyuefnci.supabase.co"; // Ganti dengan URL Supabase Anda
 const DEFAULT_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5oanNnY29jZHpkcGx5dWVmbmNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzODEzMzUsImV4cCI6MjA5NTk1NzMzNX0.tAgwc_VmGgfuFgB0-UC0xvW1qdrr1ZoLmfyTMUuVanI"; // Ganti dengan Anon Key Supabase Anda
+// =========================================================================
+
+// =========================================================================
+// KREDENSIAL LOGIN HARDCODE
+// =========================================================================
+const LOGIN_USERNAME = "admin";
+const LOGIN_PASSWORD = "tuningkhan2026";
 // =========================================================================
 
 // --- ATURAN STANDARD DATE PICKER ---
@@ -106,7 +116,7 @@ function DatePicker({ value, onChange, placeholder = "Pilih Tanggal" }) {
     <div className="relative" ref={containerRef}>
       <div 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus-within:border-orange-500 hover:border-slate-700 flex items-center justify-between cursor-pointer select-none transition-colors"
+        className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus-within:border-orange-500 hover:border-slate-700 flex items-center justify-between cursor-pointer select-none transition-colors min-h-[44px]"
       >
         <span className="text-sm">{value ? formatDateDisplay(value) : placeholder}</span>
         <div className="flex items-center gap-1.5">
@@ -114,7 +124,7 @@ function DatePicker({ value, onChange, placeholder = "Pilih Tanggal" }) {
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onChange(''); }}
-              className="text-slate-500 hover:text-slate-300 p-0.5 rounded transition"
+              className="text-slate-500 hover:text-slate-300 p-1.5 rounded transition"
               title="Bersihkan tanggal"
             >
               <X size={14} />
@@ -125,13 +135,13 @@ function DatePicker({ value, onChange, placeholder = "Pilih Tanggal" }) {
       </div>
 
       {isOpen && (
-        <div className="absolute left-0 z-50 mt-2 p-4 w-72 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl shadow-black/80">
+        <div className="absolute left-0 lg:left-auto lg:right-0 z-50 mt-2 p-4 w-72 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl shadow-black/80 max-w-[92vw]">
           <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
-            <button type="button" onClick={handlePrevMonth} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition">
+            <button type="button" onClick={handlePrevMonth} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
             </button>
             <span className="font-bold text-slate-200 text-sm tracking-wide">{monthNames[month]} {year}</span>
-            <button type="button" onClick={handleNextMonth} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition">
+            <button type="button" onClick={handleNextMonth} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
             </button>
           </div>
@@ -190,7 +200,6 @@ const generateAutoFinanceLogs = (customer, panduanList) => {
     tanggal,
     tipe: 'Pemasukan',
     plat: customer.plat,
-    crew: customer.crew || '',
     amount: Number(paket.hargaRemap || 0),
     keterangan: `Pemasukan Remap: ${paket.nama}${suffix}`,
     isAuto: true
@@ -301,10 +310,23 @@ export default function App() {
   const [deleteModal, setDeleteModal] = useState({ show: false, item: null, menu: '' });
   const [cancelConfirmModal, setCancelConfirmModal] = useState(false);
   
+  // Mobile Sidebar Drawer State
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Authentication States
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('tk_logged_in') === 'true';
+    }
+    return false;
+  });
+  const [loginInput, setLoginInput] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+
   // Custom Toast Notification System
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
 
-  // Supabase Configuration States (Prioritas: localStorage -> Hardcoded Default -> Kosong)
+  // Supabase Configuration States
   const [supabaseUrl, setSupabaseUrl] = useState(() => localStorage.getItem('tk_supabase_url') || DEFAULT_SUPABASE_URL || '');
   const [supabaseKey, setSupabaseKey] = useState(() => localStorage.getItem('tk_supabase_key') || DEFAULT_SUPABASE_KEY || '');
   const [dbStatus, setDbStatus] = useState('offline'); // 'offline', 'connected', 'error'
@@ -375,16 +397,22 @@ export default function App() {
         
         if (error) {
           setDbStatus('error');
-          showToast("Koneksi Supabase error. Silakan cek skema tabel Anda.", "error");
+          if (isLoggedIn) {
+            showToast("Koneksi Supabase error. Silakan cek skema tabel Anda.", "error");
+          }
         } else {
           setDbStatus('connected');
-          showToast("Supabase Database Berhasil Terkoneksi!", "success");
+          if (isLoggedIn) {
+            showToast("Supabase Database Berhasil Terkoneksi!", "success");
+          }
           // Sync data dari cloud ke local memory state
           fetchAllFromSupabase(client);
         }
       } catch (err) {
         setDbStatus('error');
-        showToast("Konfigurasi kredensial Supabase salah atau bermasalah.", "error");
+        if (isLoggedIn) {
+          showToast("Konfigurasi kredensial Supabase salah atau bermasalah.", "error");
+        }
       } finally {
         setLoadingDb(false);
       }
@@ -424,7 +452,9 @@ export default function App() {
       });
     } catch (err) {
       console.error("Error fetching Supabase data:", err);
-      showToast("Gagal mengambil data dari Supabase cloud.", "error");
+      if (isLoggedIn) {
+        showToast("Gagal mengambil data dari Supabase cloud.", "error");
+      }
     } finally {
       setLoadingDb(false);
     }
@@ -435,6 +465,31 @@ export default function App() {
     setTimeout(() => {
       setNotification({ show: false, message: '', type: 'success' });
     }, 4000);
+  };
+
+  // Login handler
+  const handleLoginSubmit = (e) => {
+    e.preventDefault();
+    if (loginInput.username === LOGIN_USERNAME && loginInput.password === LOGIN_PASSWORD) {
+      setIsLoggedIn(true);
+      sessionStorage.setItem('tk_logged_in', 'true');
+      setLoginError('');
+      showToast("Selamat Datang di TuningKhan Pro!", "success");
+      // Memicu sinkronisasi data instan setelah berhasil masuk
+      if (supabaseClient) {
+        fetchAllFromSupabase();
+      }
+    } else {
+      setLoginError('Username atau Password salah!');
+    }
+  };
+
+  // Logout handler
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    sessionStorage.removeItem('tk_logged_in');
+    setLoginInput({ username: '', password: '' });
+    showToast("Anda telah berhasil logout.", "info");
   };
 
   const [formData, setFormData] = useState({});
@@ -610,6 +665,7 @@ export default function App() {
     setFilterType('');
     setFilterDateStart('');
     setFilterDateEnd('');
+    setIsSidebarOpen(false); // Menutup otomatis sidebar di mobile setelah ganti tab
   };
 
   const executeDelete = async () => {
@@ -971,33 +1027,33 @@ export default function App() {
     return (
       <div className="space-y-6">
         {/* KPI Utama */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-orange-500/30 transition duration-300">
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Pelanggan</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6">
+          <div className="bg-slate-900 border border-slate-800 p-4 lg:p-6 rounded-xl hover:border-orange-500/30 transition duration-300">
+            <p className="text-slate-500 text-[10px] lg:text-xs font-bold uppercase tracking-wider">Total Pelanggan</p>
             <div className="flex items-center justify-between mt-2">
-              <h3 className="text-3xl font-extrabold text-orange-500">{totalCustomers} Unit</h3>
-              <Users size={32} className="text-slate-700" />
+              <h3 className="text-2xl lg:text-3xl font-extrabold text-orange-500">{totalCustomers} Unit</h3>
+              <Users size={28} className="text-slate-700" />
             </div>
           </div>
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-emerald-500/30 transition duration-300">
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Saldo Bersih</p>
+          <div className="bg-slate-900 border border-slate-800 p-4 lg:p-6 rounded-xl hover:border-emerald-500/30 transition duration-300">
+            <p className="text-slate-500 text-[10px] lg:text-xs font-bold uppercase tracking-wider">Total Saldo Bersih</p>
             <div className="flex items-center justify-between mt-2">
-              <h3 className="text-2xl font-extrabold text-amber-400">{formatRupiah(financialStats.totalSaldoBersih)}</h3>
-              <DollarSign size={32} className="text-slate-700" />
+              <h3 className="text-xl lg:text-2xl font-extrabold text-amber-400 truncate pr-1">{formatRupiah(financialStats.totalSaldoBersih)}</h3>
+              <DollarSign size={28} className="text-slate-700 font-bold" />
             </div>
           </div>
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-emerald-500/30 transition duration-300">
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Pemasukan</p>
+          <div className="bg-slate-900 border border-slate-800 p-4 lg:p-6 rounded-xl hover:border-emerald-500/30 transition duration-300">
+            <p className="text-slate-500 text-[10px] lg:text-xs font-bold uppercase tracking-wider">Total Pemasukan</p>
             <div className="flex items-center justify-between mt-2">
-              <h3 className="text-2xl font-extrabold text-emerald-400">{formatRupiah(financialStats.totalPemasukan)}</h3>
-              <TrendingUp size={32} className="text-slate-700" />
+              <h3 className="text-xl lg:text-2xl font-extrabold text-emerald-400 truncate pr-1">{formatRupiah(financialStats.totalPemasukan)}</h3>
+              <TrendingUp size={28} className="text-slate-700" />
             </div>
           </div>
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-red-500/30 transition duration-300">
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Pengeluaran</p>
+          <div className="bg-slate-900 border border-slate-800 p-4 lg:p-6 rounded-xl hover:border-red-500/30 transition duration-300">
+            <p className="text-slate-500 text-[10px] lg:text-xs font-bold uppercase tracking-wider">Total Pengeluaran</p>
             <div className="flex items-center justify-between mt-2">
-              <h3 className="text-2xl font-extrabold text-red-400">{formatRupiah(financialStats.totalPengeluaran)}</h3>
-              <TrendingDown size={32} className="text-slate-700" />
+              <h3 className="text-xl lg:text-2xl font-extrabold text-red-400 truncate pr-1">{formatRupiah(financialStats.totalPengeluaran)}</h3>
+              <TrendingDown size={28} className="text-slate-700" />
             </div>
           </div>
         </div>
@@ -1006,32 +1062,32 @@ export default function App() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           {/* Sektor 1: Metrik Database Pendukung */}
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+          <div className="bg-slate-900 border border-slate-800 p-5 lg:p-6 rounded-xl space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
               <span>📊 Data Pendukung Sistem</span>
             </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-950 p-3.5 rounded-lg border border-slate-850 hover:border-orange-500/20 transition">
-                <span className="text-[10px] font-bold text-slate-500 uppercase">Crew Terdaftar</span>
-                <p className="text-xl font-extrabold text-orange-400">{totalCrews} Orang</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 hover:border-orange-500/20 transition">
+                <span className="text-[10px] font-bold text-slate-500 uppercase block">Crew Terdaftar</span>
+                <p className="text-lg lg:text-xl font-extrabold text-orange-400">{totalCrews} Orang</p>
               </div>
-              <div className="bg-slate-950 p-3.5 rounded-lg border border-slate-850 hover:border-indigo-500/20 transition">
-                <span className="text-[10px] font-bold text-slate-500 uppercase">Paket Layanan</span>
-                <p className="text-xl font-extrabold text-indigo-400">{totalPanduan} Jasa</p>
+              <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 hover:border-indigo-500/20 transition">
+                <span className="text-[10px] font-bold text-slate-500 uppercase block">Paket Layanan</span>
+                <p className="text-lg lg:text-xl font-extrabold text-indigo-400">{totalPanduan} Jasa</p>
               </div>
-              <div className="bg-slate-950 p-3.5 rounded-lg border border-slate-850 hover:border-emerald-500/20 transition">
-                <span className="text-[10px] font-bold text-slate-500 uppercase">Total Log Transaksi</span>
-                <p className="text-xl font-extrabold text-emerald-400">{totalFinanceLogs} Item</p>
+              <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 hover:border-emerald-500/20 transition">
+                <span className="text-[10px] font-bold text-slate-500 uppercase block">Total Log</span>
+                <p className="text-lg lg:text-xl font-extrabold text-emerald-400">{totalFinanceLogs} Item</p>
               </div>
-              <div className="bg-slate-950 p-3.5 rounded-lg border border-slate-850 hover:border-teal-500/20 transition" title="Rata-rata pemasukan jasa remap per kendaraan">
-                <span className="text-[10px] font-bold text-slate-500 uppercase">Rata-rata Jasa/Unit</span>
+              <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 hover:border-teal-500/20 transition" title="Rata-rata pemasukan jasa remap per kendaraan">
+                <span className="text-[10px] font-bold text-slate-500 uppercase block">Rata-rata Jasa/Unit</span>
                 <p className="text-xs font-extrabold text-teal-400 mt-1 truncate">{formatRupiah(averageRevenue)}</p>
               </div>
             </div>
           </div>
 
           {/* Sektor 2: Distribusi Sumber Pemasukan */}
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+          <div className="bg-slate-900 border border-slate-800 p-5 lg:p-6 rounded-xl space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">💰 Pembagian Sumber Pemasukan</h3>
             <div className="space-y-3">
               <div>
@@ -1066,7 +1122,7 @@ export default function App() {
           </div>
 
           {/* Sektor 3: Alokasi Biaya Pengeluaran & Komisi */}
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-3">
+          <div className="bg-slate-900 border border-slate-800 p-5 lg:p-6 rounded-xl space-y-3">
             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">💸 Alokasi Pengeluaran & Komisi</h3>
             <div className="space-y-2 text-xs text-slate-400">
               <div className="flex justify-between items-center py-1 border-b border-slate-850">
@@ -1095,7 +1151,7 @@ export default function App() {
         </div>
 
         {/* Aktivitas Terakhir */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 lg:p-6">
           <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4">Aktivitas Remap Terbaru</h3>
           {data.customers.length === 0 ? (
             <p className="text-slate-600 italic text-sm">Belum ada riwayat aktivitas terbaru.</p>
@@ -1104,14 +1160,14 @@ export default function App() {
               {data.customers.slice(-3).reverse().map((item, index) => {
                 const pkg = data.panduan.find(p => p.id === item.paketId);
                 return (
-                  <div key={index} className="flex justify-between items-center border-b border-slate-800 pb-3 last:border-0 last:pb-0">
+                  <div key={index} className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-slate-800 pb-3 last:border-0 last:pb-0 gap-2">
                     <div>
-                      <p className="font-bold text-slate-200">{item.mobil} <span className="text-slate-500 font-normal">({item.plat})</span></p>
-                      <p className="text-xs text-slate-400">Pelanggan: {item.nama} | Crew Pembawa: {item.crew} | Tuner: <span className="text-emerald-400 font-medium">{item.tuner || '-'}</span> | Remote: <span className="text-cyan-400 font-medium">{item.remote || '-'}</span></p>
+                      <p className="font-bold text-slate-200 text-sm sm:text-base">{item.mobil} <span className="text-slate-500 font-normal">({item.plat})</span></p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Pelanggan: {item.nama} | Crew Pembawa: {item.crew} | Tuner: <span className="text-emerald-400 font-medium">{item.tuner || '-'}</span> | Remote: <span className="text-cyan-400 font-medium">{item.remote || '-'}</span></p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-orange-400">{pkg ? pkg.nama : '-'}</p>
-                      <p className="text-xs text-slate-500">{formatDateDisplay(item.tanggal)}</p>
+                    <div className="text-left sm:text-right shrink-0">
+                      <p className="text-xs sm:text-sm font-bold text-orange-400">{pkg ? pkg.nama : '-'}</p>
+                      <p className="text-[10px] text-slate-500">{formatDateDisplay(item.tanggal)}</p>
                     </div>
                   </div>
                 );
@@ -1134,35 +1190,123 @@ export default function App() {
     return `${d.getDate()} ${monthNames[d.getMonth()]} ${d.getFullYear()}`;
   };
 
-  return (
-    <div className="min-h-screen bg-slate-950 flex font-sans text-slate-200">
-      
-      {/* Toast Notification Alert Banner */}
-      {notification.show && (
-        <div className="fixed top-5 right-5 z-[9999] animate-bounce flex items-center p-4 rounded-xl shadow-2xl border bg-slate-900 text-slate-100 border-slate-800">
-          <div className="mr-3">
-            {notification.type === 'success' ? (
-              <CheckCircle className="text-emerald-500" size={20} />
-            ) : notification.type === 'error' ? (
-              <AlertTriangle className="text-red-500" size={20} />
-            ) : (
-              <Info className="text-cyan-500" size={20} />
-            )}
+  // --- RENDERING SCREEN JIKA BELUM LOGIN (HARDCODE LOGIN SCREEN) ---
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center font-sans text-slate-200 p-4">
+        
+        {/* Toast Notification Alert Banner di Layaran Login */}
+        {notification.show && (
+          <div className="fixed top-5 right-5 z-[9999] animate-bounce flex items-center p-4 rounded-xl shadow-2xl border bg-slate-900 text-slate-100 border-slate-800">
+            <div className="mr-3">
+              {notification.type === 'success' ? (
+                <CheckCircle className="text-emerald-500" size={20} />
+              ) : notification.type === 'error' ? (
+                <AlertTriangle className="text-red-500" size={20} />
+              ) : (
+                <Info className="text-cyan-500" size={20} />
+              )}
+            </div>
+            <span className="text-xs font-bold">{notification.message}</span>
           </div>
-          <span className="text-xs font-bold">{notification.message}</span>
+        )}
+
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
+          <div className="text-center space-y-2">
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-orange-600/10 border border-orange-500/20 flex items-center justify-center text-orange-500">
+              <Lock size={32} />
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-100 mt-4 flex items-center justify-center">
+              <Gauge className="mr-2 text-orange-500" size={26} /> Tuning<span className="text-orange-500">Khan</span>
+            </h1>
+            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">
+              Protected Cloud Administrator
+            </p>
+          </div>
+
+          <form onSubmit={handleLoginSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Username</label>
+              <input 
+                type="text" 
+                value={loginInput.username}
+                onChange={(e) => setLoginInput({ ...loginInput, username: e.target.value })}
+                placeholder="Username admin" 
+                required 
+                className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-3 rounded-xl focus:border-orange-500 focus:outline-none text-sm transition min-h-[44px]"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Password</label>
+              <input 
+                type="password" 
+                value={loginInput.password}
+                onChange={(e) => setLoginInput({ ...loginInput, password: e.target.value })}
+                placeholder="••••••••" 
+                required 
+                className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-3 rounded-xl focus:border-orange-500 focus:outline-none text-sm transition min-h-[44px]"
+              />
+            </div>
+
+            {loginError && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3.5 flex items-start gap-2.5 text-red-400 text-xs leading-relaxed">
+                <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            <button 
+              type="submit" 
+              className="w-full py-3.5 bg-orange-600 hover:bg-orange-500 text-slate-950 font-black rounded-xl text-sm transition duration-300 shadow-lg shadow-orange-500/10 hover:shadow-orange-500/20 active:scale-[0.98] min-h-[44px]"
+            >
+              Sign In ke Dashboard
+            </button>
+          </form>
+
+          <div className="pt-2 text-center text-[10px] text-slate-600 border-t border-slate-850">
+            TuningKhan v3.5 &copy; 2026 Admin Panel
+          </div>
         </div>
+      </div>
+    );
+  }
+
+  // --- RENDERING SCREEN JIKA SUDAH LOGIN (MAIN APPLICATION) ---
+  return (
+    <div className="min-h-screen bg-slate-950 flex font-sans text-slate-200 relative overflow-x-hidden">
+      
+      {/* Mobile Drawer Overlay Backdrop */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
       )}
 
-      {/* Sidebar Nav */}
-      <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between">
+      {/* Sidebar Nav (Mobile off-canvas slide & Desktop static) */}
+      <aside className={`
+        fixed inset-y-0 left-0 w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between z-50 transition-transform duration-300 ease-in-out lg:static lg:translate-x-0
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
         <div>
-          <div className="p-6 border-b border-slate-800">
-            <h1 className="text-2xl font-black flex items-center text-orange-500 tracking-tight">
-              <Gauge className="mr-2 text-orange-500" size={28} /> Tuning<span className="text-slate-100 font-bold">Khan</span>
-            </h1>
-            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-extrabold flex items-center gap-1.5">
-              <span>Cloud Admin</span>
-            </p>
+          <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-black flex items-center text-orange-500 tracking-tight">
+                <Gauge className="mr-2 text-orange-500" size={28} /> Tuning<span className="text-slate-100 font-bold">Khan</span>
+              </h1>
+              <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-extrabold flex items-center gap-1.5">
+                <span>Cloud Admin</span>
+              </p>
+            </div>
+            
+            {/* Close sidebar drawer button on Mobile view */}
+            <button 
+              onClick={() => setIsSidebarOpen(false)} 
+              className="lg:hidden p-2 text-slate-500 hover:text-slate-300"
+            >
+              <X size={20} />
+            </button>
           </div>
           
           <nav className="p-4 space-y-2">
@@ -1176,50 +1320,83 @@ export default function App() {
               <button 
                 key={item.id}
                 onClick={() => { handleTabChange(item.id) }}
-                className={`w-full flex items-center px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all ${
+                className={`w-full flex items-center px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all min-h-[44px] ${
                   activeTab === item.id 
                   ? 'bg-orange-600/10 text-orange-500 border border-orange-500/20' 
                   : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
                 }`}
               >
-                <item.icon size={18} className="mr-3" /> {item.name}
+                <item.icon size={18} className="mr-3 shrink-0" /> {item.name}
               </button>
             ))}
           </nav>
         </div>
 
-        <div className="p-4 border-t border-slate-800 text-center text-xs text-slate-600">
-          TuningKhan v3.5 &copy; 2026
+        {/* Bagian Bawah Sidebar (User Info & Logout) */}
+        <div className="p-4 border-t border-slate-850 space-y-3">
+          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/50 flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center text-slate-950 font-black text-xs shrink-0">
+              AD
+            </div>
+            <div className="truncate">
+              <p className="text-xs font-bold text-slate-300 truncate">Administrator</p>
+              <p className="text-[9px] text-orange-500 font-bold uppercase tracking-wider">Super Secure</p>
+            </div>
+          </div>
+          
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center px-4 py-2.5 rounded-xl text-xs font-bold text-red-400 hover:bg-red-500/10 hover:text-red-300 border border-transparent hover:border-red-500/10 transition-all duration-300 min-h-[40px]"
+          >
+            <LogOut size={14} className="mr-2" /> Keluar Sistem (Logout)
+          </button>
+          
+          <div className="text-center text-[10px] text-slate-600">
+            TuningKhan v3.5 &copy; 2026
+          </div>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-slate-900 border-b border-slate-800 h-16 flex items-center justify-between px-8 shadow-md">
+      <main className="flex-1 flex flex-col overflow-hidden w-full">
+        {/* Header Area */}
+        <header className="bg-slate-900 border-b border-slate-800 h-16 flex items-center justify-between px-4 sm:px-8 shrink-0 shadow-md z-30">
           <div className="flex items-center space-x-3">
-            <span className={`h-2.5 w-2.5 rounded-full animate-pulse ${
-              dbStatus === 'connected' ? 'bg-emerald-500' : dbStatus === 'error' ? 'bg-red-500' : 'bg-amber-500'
-            }`}></span>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-              {dbStatus === 'connected' ? 'Supabase Connected' : dbStatus === 'error' ? 'Supabase Error' : 'Offline Mode (Local)'}
-            </span>
-            {loadingDb && <span className="text-xs text-orange-400 animate-pulse">Syncing...</span>}
+            {/* Hamburger Button on Mobile View */}
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden p-2 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition min-w-[40px] min-h-[40px] flex items-center justify-center"
+            >
+              <Menu size={22} />
+            </button>
+
+            <div className="flex items-center space-x-2">
+              <span className={`h-2.5 w-2.5 rounded-full animate-pulse ${
+                dbStatus === 'connected' ? 'bg-emerald-500' : dbStatus === 'error' ? 'bg-red-500' : 'bg-amber-500'
+              }`}></span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest hidden sm:inline-block">
+                {dbStatus === 'connected' ? 'Supabase Connected' : dbStatus === 'error' ? 'Supabase Error' : 'Offline Mode (Local)'}
+              </span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest sm:hidden">
+                {dbStatus === 'connected' ? 'Cloud' : 'Offline'}
+              </span>
+            </div>
           </div>
           
-          <div className="flex items-center space-x-6">
+          <div className="flex items-center space-x-4 sm:space-x-6">
             <div className="text-right">
-              <p className="text-sm font-semibold text-slate-200">Admin</p>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Super Control</p>
+              <p className="text-xs sm:text-sm font-semibold text-slate-200">Admin</p>
+              <p className="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-wider">Super Control</p>
             </div>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center text-slate-950 font-black text-sm border-2 border-slate-800">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center text-slate-950 font-black text-xs sm:text-sm border-2 border-slate-800">
               TK
             </div>
           </div>
         </header>
 
         {/* Dynamic Inner Panel Content */}
-        <div className="flex-1 overflow-auto p-8">
-          <div className="max-w-6xl mx-auto space-y-8">
+        <div className="flex-1 overflow-auto p-4 sm:p-8">
+          <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
             
             {activeTab === 'dashboard' && (
               renderDashboardStats()
@@ -1251,7 +1428,7 @@ export default function App() {
                         defaultValue={supabaseUrl} 
                         placeholder="https://your-project-id.supabase.co" 
                         required 
-                        className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" 
+                        className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" 
                       />
                     </div>
                     <div>
@@ -1262,16 +1439,16 @@ export default function App() {
                         defaultValue={supabaseKey} 
                         placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." 
                         required 
-                        className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none font-mono text-sm" 
+                        className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none font-mono text-sm min-h-[44px]" 
                       />
                     </div>
 
-                    <div className="flex gap-3 pt-4">
-                      <button type="submit" className="px-5 py-2.5 bg-orange-600 text-slate-950 font-bold rounded-xl hover:bg-orange-500 transition shadow-md">
+                    <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                      <button type="submit" className="px-5 py-2.5 bg-orange-600 text-slate-950 font-bold rounded-xl hover:bg-orange-500 transition shadow-md min-h-[44px]">
                         Simpan & Hubungkan Database
                       </button>
                       {(supabaseUrl || supabaseKey) && (
-                        <button type="button" onClick={clearSupabaseCredentials} className="px-4 py-2.5 bg-slate-800 text-red-400 border border-slate-700 font-bold rounded-xl hover:bg-red-500/10 hover:text-red-300 transition">
+                        <button type="button" onClick={clearSupabaseCredentials} className="px-4 py-2.5 bg-slate-800 text-red-400 border border-slate-700 font-bold rounded-xl hover:bg-red-500/10 hover:text-red-300 transition min-h-[44px]">
                           Putus Koneksi
                         </button>
                       )}
@@ -1360,11 +1537,11 @@ CREATE TABLE finance (
             {activeTab !== 'dashboard' && activeTab !== 'db_settings' && (
               <>
                 {!showFormPanel && (
-                  <div className="flex justify-between items-center bg-slate-900 p-4 border border-slate-800 rounded-xl">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-900 p-4 border border-slate-800 rounded-xl gap-4">
                     <p className="text-sm text-slate-400">Punya data baru untuk dimasukkan ke bagian {activeTab}?</p>
                     <button 
                       onClick={() => { resetForm(); setShowFormPanel(true); }} 
-                      className="bg-orange-600 text-slate-950 font-extrabold px-4 py-2 rounded-xl flex items-center hover:bg-orange-500 hover:scale-105 transition shadow-lg"
+                      className="w-full sm:w-auto bg-orange-600 text-slate-950 font-extrabold px-4 py-2.5 rounded-xl flex items-center justify-center hover:bg-orange-500 hover:scale-105 transition shadow-lg min-h-[44px]"
                     >
                       <Plus size={16} className="mr-2" /> Tambah Baru
                     </button>
@@ -1373,27 +1550,27 @@ CREATE TABLE finance (
 
                 {/* CRUDS Forms */}
                 {showFormPanel && (
-                  <div className="bg-slate-900 border-2 border-orange-500/30 p-6 rounded-xl shadow-xl">
+                  <div className="bg-slate-900 border-2 border-orange-500/30 p-4 sm:p-6 rounded-xl shadow-xl">
                     <h3 className="text-base font-bold text-slate-100 border-b border-slate-850 pb-3 mb-4 flex items-center">
                       {editingId ? <Edit size={18} className="mr-2 text-orange-500" /> : <Plus size={18} className="mr-2 text-orange-500" />}
                       {editingId ? 'Edit Item' : 'Tambah Baru'} - <span className="capitalize text-orange-500 ml-1">{activeTab}</span>
                     </h3>
 
-                    <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <form onSubmit={handleSave} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       
                       {activeTab === 'panduan' && (
                         <>
-                          <div className="md:col-span-2">
+                          <div className="sm:col-span-2">
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Paket / Layanan</label>
-                            <input type="text" name="nama" value={formData.nama || ''} onChange={handleInputChange} placeholder="Misal: Stage 1 Honda Brio" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                            <input type="text" name="nama" value={formData.nama || ''} onChange={handleInputChange} placeholder="Misal: Stage 1 Honda Brio" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" />
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Harga Remap (Rp)</label>
-                            <input type="number" name="hargaRemap" value={formData.hargaRemap || formData.harga_remap || ''} onChange={handleInputChange} placeholder="1500000" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                            <input type="number" name="hargaRemap" value={formData.hargaRemap || formData.harga_remap || ''} onChange={handleInputChange} placeholder="1500000" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" />
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Benefit (Rp)</label>
-                            <input type="number" name="benefit" value={formData.benefit || ''} onChange={handleInputChange} placeholder="300000" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                            <input type="number" name="benefit" value={formData.benefit || ''} onChange={handleInputChange} placeholder="300000" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" />
                           </div>
                         </>
                       )}
@@ -1409,35 +1586,35 @@ CREATE TABLE finance (
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Pelanggan</label>
-                            <input type="text" name="nama" value={formData.nama || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                            <input type="text" name="nama" value={formData.nama || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" />
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">No. Plat Kendaraan</label>
-                            <input type="text" name="plat" value={formData.plat || ''} onChange={handleInputChange} placeholder="B 1234 ABC" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                            <input type="text" name="plat" value={formData.plat || ''} onChange={handleInputChange} placeholder="B 1234 ABC" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" />
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tipe Mobil</label>
-                            <input type="text" name="mobil" value={formData.mobil || ''} onChange={handleInputChange} placeholder="Innova Reborn" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                            <input type="text" name="mobil" value={formData.mobil || ''} onChange={handleInputChange} placeholder="Innova Reborn" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" />
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Warna Mobil</label>
-                            <input type="text" name="warna" value={formData.warna || ''} onChange={handleInputChange} placeholder="Hitam / Putih / Silver" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                            <input type="text" name="warna" value={formData.warna || ''} onChange={handleInputChange} placeholder="Hitam / Putih / Silver" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" />
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">VIN (No. Rangka)</label>
-                            <input type="text" name="vin" value={formData.vin || ''} onChange={handleInputChange} placeholder="MHR17xxxxxxxxxxxx" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                            <input type="text" name="vin" value={formData.vin || ''} onChange={handleInputChange} placeholder="MHR17xxxxxxxxxxxx" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" />
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">No. HP Pelanggan</label>
-                            <input type="text" name="phone" value={formData.phone || ''} onChange={handleInputChange} placeholder="08123xxxxxx" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                            <input type="text" name="phone" value={formData.phone || ''} onChange={handleInputChange} placeholder="08123xxxxxx" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" />
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Lokasi Remap</label>
-                            <input type="text" name="location" value={formData.location || ''} onChange={handleInputChange} placeholder="Bengkel Utama" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                            <input type="text" name="location" value={formData.location || ''} onChange={handleInputChange} placeholder="Bengkel Utama" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" />
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pilihan Paket Remap</label>
-                            <select name="paketId" value={formData.paketId || formData.paket_id || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                            <select name="paketId" value={formData.paketId || formData.paket_id || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]">
                               <option value="">-- Pilih Paket Panduan --</option>
                               {data.panduan.map(p => (
                                 <option key={p.id} value={p.id}>{p.nama} (Remap: {formatRupiah(p.hargaRemap)})</option>
@@ -1446,7 +1623,7 @@ CREATE TABLE finance (
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Crew Pembawa (Membawa Pelanggan)</label>
-                            <select name="crew" value={formData.crew || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                            <select name="crew" value={formData.crew || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]">
                               <option value="">-- Pilih Crew Pembawa --</option>
                               {data.crews.map(c => (
                                 <option key={c.id} value={c.nama}>{c.nama}</option>
@@ -1455,7 +1632,7 @@ CREATE TABLE finance (
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pilihan Tuner (Rp250.000 Benefit)</label>
-                            <select name="tuner" value={formData.tuner || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                            <select name="tuner" value={formData.tuner || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]">
                               <option value="">-- Pilih Tuner --</option>
                               {data.crews.map(c => (
                                 <option key={c.id} value={c.nama}>{c.nama}</option>
@@ -1464,7 +1641,7 @@ CREATE TABLE finance (
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pilihan Remote (Rp150.000 Benefit, Opsional)</label>
-                            <select name="remote" value={formData.remote || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                            <select name="remote" value={formData.remote || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]">
                               <option value="">-- Pilih Remote --</option>
                               {data.crews.map(c => (
                                 <option key={c.id} value={c.nama}>{c.nama}</option>
@@ -1473,15 +1650,15 @@ CREATE TABLE finance (
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Perantara / Sales (Opsional)</label>
-                            <input type="text" name="perantara" value={formData.perantara || ''} onChange={handleInputChange} placeholder="Nama Perantara" className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                            <input type="text" name="perantara" value={formData.perantara || ''} onChange={handleInputChange} placeholder="Nama Perantara" className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" />
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Fee Perantara (Rp) (Opsional)</label>
-                            <input type="number" name="perantaraFee" value={formData.perantaraFee || formData.perantara_fee || ''} onChange={handleInputChange} placeholder="Contoh: 100000" className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                            <input type="number" name="perantaraFee" value={formData.perantaraFee || formData.perantara_fee || ''} onChange={handleInputChange} placeholder="Contoh: 100000" className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" />
                           </div>
 
                           {/* Checklist Support Crew */}
-                          <div className="md:col-span-2">
+                          <div className="sm:col-span-2">
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Pilihan Support (Rp50.000 Benefit, Bisa Lebih Dari 1)</label>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-slate-950 border border-slate-800 p-3 rounded-lg max-h-40 overflow-y-auto">
                               {data.crews.map(c => {
@@ -1501,7 +1678,7 @@ CREATE TABLE finance (
                                 };
 
                                 return (
-                                  <label key={c.id} className="flex items-center gap-2 text-slate-300 text-sm cursor-pointer hover:text-slate-100 transition select-none">
+                                  <label key={c.id} className="flex items-center gap-2 text-slate-300 text-sm cursor-pointer hover:text-slate-100 transition select-none min-h-[40px]">
                                     <input 
                                       type="checkbox" 
                                       checked={isChecked} 
@@ -1521,11 +1698,11 @@ CREATE TABLE finance (
                         <>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Anggota Crew</label>
-                            <input type="text" name="nama" value={formData.nama || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                            <input type="text" name="nama" value={formData.nama || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" />
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Posisi / Jabatan</label>
-                            <input type="text" name="posisi" value={formData.posisi || ''} onChange={handleInputChange} placeholder="Tuner / Teknisi" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                            <input type="text" name="posisi" value={formData.posisi || ''} onChange={handleInputChange} placeholder="Tuner / Teknisi" required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" />
                           </div>
                         </>
                       )}
@@ -1541,7 +1718,7 @@ CREATE TABLE finance (
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tipe Alur Kas</label>
-                            <select name="tipe" value={formData.tipe || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                            <select name="tipe" value={formData.tipe || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]">
                               <option value="">-- Pilih Tipe --</option>
                               <option value="Pemasukan">Pemasukan</option>
                               <option value="Pengeluaran">Pengeluaran</option>
@@ -1549,7 +1726,7 @@ CREATE TABLE finance (
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Hubungkan No. Plat Customer</label>
-                            <select name="plat" value={formData.plat || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                            <select name="plat" value={formData.plat || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]">
                               <option value="">-- Non Plat / Hubungkan Plat --</option>
                               {data.customers.map(c => (
                                 <option key={c.id} value={c.plat}>{c.plat} ({c.nama})</option>
@@ -1558,7 +1735,7 @@ CREATE TABLE finance (
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Crew Penerima (Auto)</label>
-                            <select name="crew" value={formData.crew || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none">
+                            <select name="crew" value={formData.crew || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]">
                               <option value="">-- Pilih Crew --</option>
                               {data.crews.map(c => (
                                 <option key={c.id} value={c.nama}>{c.nama}</option>
@@ -1567,18 +1744,18 @@ CREATE TABLE finance (
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Jumlah Nominal (Rp) (Auto)</label>
-                            <input type="number" name="amount" value={formData.amount || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                            <input type="number" name="amount" value={formData.amount || ''} onChange={handleInputChange} required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" />
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Keterangan Tambahan</label>
-                            <input type="text" name="keterangan" value={formData.keterangan || ''} onChange={handleInputChange} placeholder="Keterangan transaksi..." required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none" />
+                            <input type="text" name="keterangan" value={formData.keterangan || ''} onChange={handleInputChange} placeholder="Keterangan transaksi..." required className="w-full bg-slate-950 border border-slate-800 text-slate-200 p-2.5 rounded-lg focus:border-orange-500 focus:outline-none min-h-[44px]" />
                           </div>
                         </>
                       )}
 
-                      <div className="md:col-span-2 flex justify-end gap-3 mt-4 border-t border-slate-850 pt-4">
-                        <button type="button" onClick={handleCancelClick} className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl hover:text-slate-200 transition">Batal</button>
-                        <button type="submit" className="px-5 py-2 bg-orange-600 text-slate-950 font-bold rounded-xl hover:bg-orange-500 transition shadow-md">
+                      <div className="sm:col-span-2 flex justify-end gap-3 mt-4 border-t border-slate-850 pt-4">
+                        <button type="button" onClick={handleCancelClick} className="px-4 py-2.5 bg-slate-800 text-slate-400 rounded-xl hover:text-slate-200 transition min-h-[44px]">Batal</button>
+                        <button type="submit" className="px-5 py-2.5 bg-orange-600 text-slate-950 font-bold rounded-xl hover:bg-orange-500 transition shadow-md min-h-[44px]">
                           {editingId ? 'Update Data' : 'Simpan Data'}
                         </button>
                       </div>
@@ -1591,7 +1768,7 @@ CREATE TABLE finance (
                   
                   {/* MENU STATS KEUNGAN YANG DINAMIS DAN TRANSPARAN */}
                   {activeTab === 'finance' && (
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-slate-900 border border-slate-800 p-4 sm:p-5 rounded-2xl shadow-xl">
                       <div className="bg-slate-950/60 p-4 border border-orange-500/20 rounded-xl flex flex-col justify-between relative group overflow-hidden">
                         <div className="absolute right-3 top-3 text-orange-500/20">
                           <DollarSign size={24} />
@@ -1635,27 +1812,27 @@ CREATE TABLE finance (
                       <div className="flex flex-wrap items-center gap-3 flex-1">
                         
                         {/* Search */}
-                        <div className="relative flex-1 min-w-[200px] max-w-sm">
-                          <Search className="absolute left-3 top-2.5 text-slate-600" size={18} />
+                        <div className="relative w-full lg:w-auto flex-1 min-w-[200px] max-w-sm">
+                          <Search className="absolute left-3 top-3 text-slate-600" size={18} />
                           <input 
                             type="text" 
                             placeholder="Cari data..." 
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-850 rounded-xl py-2 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-orange-500"
+                            className="w-full bg-slate-950 border border-slate-850 rounded-xl py-2.5 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-orange-500 min-h-[44px]"
                           />
                         </div>
 
                         {/* Dropdown Filters */}
                         {activeTab === 'customers' && (
-                          <select value={filterCrew} onChange={e => setFilterCrew(e.target.value)} className="bg-slate-950 border border-slate-850 rounded-xl p-2 text-xs text-slate-300">
+                          <select value={filterCrew} onChange={e => setFilterCrew(e.target.value)} className="w-full lg:w-auto bg-slate-950 border border-slate-850 rounded-xl p-2.5 text-xs text-slate-300 min-h-[44px]">
                             <option value="">Semua Crew</option>
                             {data.crews.map(c => <option key={c.id} value={c.nama}>{c.nama}</option>)}
                           </select>
                         )}
 
                         {activeTab === 'finance' && (
-                          <select value={filterType} onChange={e => setFilterType(e.target.value)} className="bg-slate-950 border border-slate-850 rounded-xl p-2 text-xs text-slate-300">
+                          <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full lg:w-auto bg-slate-950 border border-slate-850 rounded-xl p-2.5 text-xs text-slate-300 min-h-[44px]">
                             <option value="">Semua Tipe</option>
                             <option value="Pemasukan">Pemasukan</option>
                             <option value="Pengeluaran">Pengeluaran</option>
@@ -1664,12 +1841,12 @@ CREATE TABLE finance (
 
                         {/* Date Filter - Menambahkan filter untuk crews agar bisa menyaring kontribusi benefit */}
                         {(activeTab === 'customers' || activeTab === 'finance' || activeTab === 'crews') && (
-                          <div className="flex items-center gap-2">
-                            <div className="w-36">
+                          <div className="flex items-center gap-2 w-full lg:w-auto">
+                            <div className="flex-1 lg:w-36 lg:flex-initial">
                               <DatePicker value={filterDateStart} onChange={setFilterDateStart} placeholder="Dari Tgl" />
                             </div>
                             <span className="text-slate-600 text-xs">-</span>
-                            <div className="w-36">
+                            <div className="flex-1 lg:w-36 lg:flex-initial">
                               <DatePicker value={filterDateEnd} onChange={setFilterDateEnd} placeholder="S/D Tgl" />
                             </div>
                           </div>
@@ -1677,16 +1854,16 @@ CREATE TABLE finance (
                       </div>
 
                       {/* Export Actions */}
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 w-full lg:w-auto justify-end">
                         <button 
                           onClick={() => exportToCSV(activeTab, filteredItems)}
-                          className="bg-slate-950 border border-slate-800 hover:border-emerald-500/30 hover:bg-emerald-500/10 text-slate-300 hover:text-emerald-400 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2"
+                          className="bg-slate-950 border border-slate-800 hover:border-emerald-500/30 hover:bg-emerald-500/10 text-slate-300 hover:text-emerald-400 px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 min-h-[44px]"
                         >
                           <Download size={14} /> <span>Excel</span>
                         </button>
                         <button 
                           onClick={() => exportToPDF(activeTab, filteredItems)}
-                          className="bg-slate-950 border border-slate-800 hover:border-orange-500/30 hover:bg-orange-500/10 text-slate-300 hover:text-orange-400 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2"
+                          className="bg-slate-950 border border-slate-800 hover:border-orange-500/30 hover:bg-orange-500/10 text-slate-300 hover:text-orange-400 px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 min-h-[44px]"
                         >
                           <Printer size={14} /> <span>PDF</span>
                         </button>
@@ -1694,8 +1871,170 @@ CREATE TABLE finance (
                     </div>
                   )}
 
-                  {/* Table list */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                  {/* CARDS LIST FOR MOBILE VIEW (Otomatis menggantikan tabel di perangkat kecil) */}
+                  <div className="block lg:hidden space-y-4">
+                    {filteredItems.length === 0 ? (
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-600 italic text-sm">
+                        Tidak ada data ditemukan.
+                      </div>
+                    ) : (
+                      filteredItems.map(item => (
+                        <div key={item.id} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4 shadow-lg">
+                          
+                          {activeTab === 'customers' && (
+                            <>
+                              <div className="flex justify-between items-start gap-2 border-b border-slate-800 pb-3">
+                                <div>
+                                  <p className="font-bold text-slate-200 text-base">{item.nama}</p>
+                                  <span className="text-[10px] text-slate-500 font-mono block mt-0.5">{formatDateDisplay(item.tanggal)}</span>
+                                </div>
+                                <span className="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-lg text-xs font-mono text-orange-400 font-extrabold">
+                                  {item.plat}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-xs">
+                                <div>
+                                  <p className="text-slate-500 font-medium">Kendaraan</p>
+                                  <p className="text-slate-300 font-semibold">{item.mobil}</p>
+                                </div>
+                                <div>
+                                  <p className="text-slate-500 font-medium">Warna</p>
+                                  <p className="text-slate-300 font-semibold">{item.warna || '-'}</p>
+                                </div>
+                                <div className="col-span-2">
+                                  <p className="text-slate-500 font-medium">VIN (No. Rangka)</p>
+                                  <p className="text-slate-300 font-mono text-[11px] truncate">{item.vin || '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-slate-500 font-medium">Pilihan Paket</p>
+                                  <p className="text-orange-400 font-bold">
+                                    {(() => {
+                                      const p = data.panduan.find(x => x.id === item.paketId);
+                                      return p ? p.nama : '-';
+                                    })()}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-slate-500 font-medium">Crew Pembawa</p>
+                                  <p className="text-slate-300 font-semibold">{item.crew || '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-slate-500 font-medium">Tuner / Remote</p>
+                                  <p className="text-slate-300 font-semibold">
+                                    {item.tuner || '-'} / <span className="text-cyan-400">{item.remote || '-'}</span>
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-slate-500 font-medium">Support Crews</p>
+                                  <p className="text-indigo-400 font-semibold truncate max-w-[120px]" title={item.support || '-'}>{item.support || '-'}</p>
+                                </div>
+                                {item.perantara && (
+                                  <div className="col-span-2 bg-slate-950/60 p-2 rounded-lg border border-slate-850 flex justify-between items-center text-[11px]">
+                                    <div>
+                                      <p className="text-slate-500">Perantara: <span className="text-slate-300 font-semibold">{item.perantara}</span></p>
+                                    </div>
+                                    <p className="text-orange-400 font-bold">Fee: {formatRupiah(item.perantaraFee || 0)}</p>
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          )}
+
+                          {activeTab === 'crews' && (
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <p className="font-bold text-slate-200 text-base">{item.nama}</p>
+                                <span className="text-xs text-slate-400 block mt-0.5">{item.posisi}</span>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Benefit Akumulasi</p>
+                                <p className="text-lg font-black text-emerald-400 mt-0.5">{formatRupiah(calculateCrewBenefit(item.nama))}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {activeTab === 'finance' && (
+                            <>
+                              <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider
+                                  ${item.tipe === 'Pemasukan' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
+                                    'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                                  {item.tipe}
+                                </span>
+                                <span className="text-xs text-slate-500 font-mono">{formatDateDisplay(item.tanggal)}</span>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-xs">
+                                <div>
+                                  <p className="text-slate-500 font-medium">Plat Terkait</p>
+                                  <p className="text-slate-300 font-mono font-semibold">{item.plat || '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-slate-500 font-medium">Crew Penerima</p>
+                                  <p className="text-slate-300 font-semibold">{item.crew || '-'}</p>
+                                </div>
+                                <div className="col-span-2">
+                                  <p className="text-slate-500 font-medium">Keterangan</p>
+                                  <p className="text-slate-300 leading-relaxed text-xs">{item.keterangan}</p>
+                                </div>
+                                <div className="col-span-2 pt-2 border-t border-slate-850 flex justify-between items-center">
+                                  <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Nominal Transaksi</span>
+                                  <span className={`text-base font-black ${item.tipe === 'Pengeluaran' ? 'text-red-400' : 'text-emerald-400'}`}>
+                                    {item.tipe === 'Pengeluaran' ? '-' : '+'}{formatRupiah(item.amount)}
+                                  </span>
+                                </div>
+                              </div>
+                            </>
+                          )}
+
+                          {activeTab === 'panduan' && (
+                            <div className="space-y-3">
+                              <div className="border-b border-slate-800 pb-2">
+                                <p className="font-bold text-slate-200 text-base">{item.nama}</p>
+                              </div>
+                              <div className="flex justify-between items-center text-xs">
+                                <div>
+                                  <p className="text-slate-500">Harga Remap</p>
+                                  <p className="text-orange-400 font-extrabold text-sm mt-0.5">{formatRupiah(item.hargaRemap)}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-slate-500">Benefit Komisi</p>
+                                  <p className="text-emerald-400 font-extrabold text-sm mt-0.5">{formatRupiah(item.benefit)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Action Buttons at the Bottom of Mobile Card */}
+                          <div className="flex justify-end gap-3 pt-3 border-t border-slate-800/80">
+                            <button 
+                              onClick={() => {
+                                const prepItem = { ...item };
+                                if (prepItem.support && typeof prepItem.support === 'string') {
+                                  prepItem.support = prepItem.support.split(',').map(s => s.trim());
+                                }
+                                handleEdit(prepItem);
+                              }} 
+                              className="px-3 py-2 bg-slate-850 hover:bg-slate-800 text-orange-400 hover:text-orange-300 rounded-lg text-xs font-bold transition flex items-center gap-1.5 min-h-[36px]"
+                            >
+                              <Edit size={14} /> <span>Edit</span>
+                            </button>
+                            <button 
+                              onClick={() => setDeleteModal({ show: true, item, menu: activeTab })} 
+                              className="px-3 py-2 bg-red-950/20 hover:bg-red-950/40 text-red-400 hover:text-red-300 rounded-lg text-xs font-bold transition flex items-center gap-1.5 border border-red-500/10 min-h-[36px]"
+                            >
+                              <Trash2 size={14} /> <span>Hapus</span>
+                            </button>
+                          </div>
+
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* TABLE VIEW FOR DESKTOP VIEW ONLY (Otomatis disembunyikan di HP) */}
+                  <div className="hidden lg:block bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
                         <thead>
@@ -1818,8 +2157,8 @@ CREATE TABLE finance (
                                         prepItem.support = prepItem.support.split(',').map(s => s.trim());
                                       }
                                       handleEdit(prepItem);
-                                    }} className="p-1 text-slate-400 hover:text-orange-500 rounded transition"><Edit size={16} /></button>
-                                    <button onClick={() => setDeleteModal({ show: true, item, menu: activeTab })} className="p-1 text-slate-400 hover:text-red-500 rounded transition"><Trash2 size={16} /></button>
+                                    }} className="p-2 text-slate-400 hover:text-orange-500 rounded-lg hover:bg-slate-800 transition min-w-[36px] min-h-[36px] flex items-center justify-center" title="Edit Data"><Edit size={16} /></button>
+                                    <button onClick={() => setDeleteModal({ show: true, item, menu: activeTab })} className="p-2 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-800 transition min-w-[36px] min-h-[36px] flex items-center justify-center" title="Hapus Data"><Trash2 size={16} /></button>
                                   </div>
                                 </td>
                               </tr>
@@ -1839,9 +2178,9 @@ CREATE TABLE finance (
 
       {/* CONFIRMATION MODALS */}
       {deleteModal.show && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-sm w-full p-6 relative">
-            <button onClick={() => setDeleteModal({ show: false, item: null, menu: '' })} className="absolute top-4 right-4 text-slate-500 hover:text-slate-300">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center z-[9999] p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-sm w-full p-6 relative animate-in fade-in zoom-in-95 duration-200">
+            <button onClick={() => setDeleteModal({ show: false, item: null, menu: '' })} className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 p-1 rounded-lg">
               <X size={20} />
             </button>
             <div className="flex items-center text-red-500 mb-4">
@@ -1852,17 +2191,17 @@ CREATE TABLE finance (
               Tindakan ini tidak dapat dibatalkan. Menghapus item ini akan melenyapkan data terkait secara permanen.
             </p>
             <div className="flex justify-end gap-3">
-              <button onClick={() => setDeleteModal({ show: false, item: null, menu: '' })} className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl hover:text-slate-200 transition">Batal</button>
-              <button onClick={executeDelete} className="px-4 py-2 bg-red-600 text-slate-100 rounded-xl font-bold hover:bg-red-500 transition">Ya, Hapus</button>
+              <button onClick={() => setDeleteModal({ show: false, item: null, menu: '' })} className="px-4 py-2.5 bg-slate-800 text-slate-400 rounded-xl hover:text-slate-200 transition min-h-[44px]">Batal</button>
+              <button onClick={executeDelete} className="px-4 py-2.5 bg-red-600 text-slate-100 rounded-xl font-bold hover:bg-red-500 transition min-h-[44px]">Ya, Hapus</button>
             </div>
           </div>
         </div>
       )}
 
       {cancelConfirmModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-sm w-full p-6 relative">
-            <button onClick={() => setCancelConfirmModal(false)} className="absolute top-4 right-4 text-slate-500 hover:text-slate-300">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center z-[9999] p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-sm w-full p-6 relative animate-in fade-in zoom-in-95 duration-200">
+            <button onClick={() => setCancelConfirmModal(false)} className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 p-1">
               <X size={20} />
             </button>
             <div className="flex items-center text-amber-500 mb-4">
@@ -1873,8 +2212,8 @@ CREATE TABLE finance (
               Anda sedang mengetik data baru. Apakah Anda yakin ingin membuang semua perubahan yang belum disimpan?
             </p>
             <div className="flex justify-end gap-3">
-              <button onClick={() => setCancelConfirmModal(false)} className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl hover:text-slate-200 transition">Kembali Lanjutkan</button>
-              <button onClick={resetForm} className="px-4 py-2 bg-amber-600 text-slate-950 font-bold rounded-xl hover:bg-amber-500 transition">Ya, Batalkan</button>
+              <button onClick={() => setCancelConfirmModal(false)} className="px-4 py-2.5 bg-slate-800 text-slate-400 rounded-xl hover:text-slate-200 transition min-h-[44px]">Kembali</button>
+              <button onClick={resetForm} className="px-4 py-2.5 bg-amber-600 text-slate-950 font-bold rounded-xl hover:bg-amber-500 transition min-h-[44px]">Ya, Batalkan</button>
             </div>
           </div>
         </div>
